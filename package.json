@@ -2,7 +2,7 @@
   "name": "infinite-terminal",
   "displayName": "Infinite Terminal - 无限终端",
   "description": "An infinite canvas for managing multiple terminals with pixel art office view",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "infinite-terminal",
   "engines": {
     "vscode": "^1.85.0"
@@ -35,6 +35,10 @@
       {
         "command": "infiniteTerminal.createWorktree",
         "title": "Infinite Terminal: Create Git Worktree Terminal"
+      },
+      {
+        "command": "infiniteTerminal.searchTerminals",
+        "title": "Infinite Terminal: Search Terminals"
       }
     ],
     "viewsContainers": {
@@ -103,6 +107,12 @@
         "key": "ctrl+shift+n",
         "mac": "cmd+shift+n",
         "when": "infiniteTerminal.canvasActive"
+      },
+      {
+        "command": "infiniteTerminal.searchTerminals",
+        "key": "ctrl+p",
+        "mac": "cmd+p",
+        "when": "infiniteTerminal.canvasActive"
       }
     ]
   },
@@ -122,9 +132,6 @@
     "@vscode/vsce": "^2.22.0"
   },
   "dependencies": {
-    "node-pty": "^1.0.0",
-    "xterm": "^5.3.0",
-    "xterm-addon-fit": "^0.8.0",
-    "xterm-addon-web-links": "^0.9.0"
+    "node-pty": "^1.0.0"
   }
 }

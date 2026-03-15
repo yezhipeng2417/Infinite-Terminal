@@ -33,8 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (panel) {
           panel.createTerminal(picked.preset.name, picked.preset.command);
         } else {
-          const newPanel = await InfiniteCanvasPanel.createOrShow(context, worktreeManager);
-          // Small delay to let the webview initialize
+          const newPanel = InfiniteCanvasPanel.createOrShow(context, worktreeManager);
           setTimeout(() => {
             newPanel?.createTerminal(picked.preset.name, picked.preset.command);
           }, 500);
@@ -63,6 +62,13 @@ export function activate(context: vscode.ExtensionContext) {
         if (branchName) {
           currentPanel.createWorktreeTerminal(branchName);
         }
+      }
+    }),
+
+    vscode.commands.registerCommand('infiniteTerminal.searchTerminals', () => {
+      const panel = InfiniteCanvasPanel.currentPanel;
+      if (panel) {
+        panel.searchTerminals();
       }
     })
   );

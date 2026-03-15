@@ -1,53 +1,71 @@
 # ∞ Infinite Terminal - 无限终端
 
-A VS Code extension that provides an **infinite canvas** for managing multiple terminals, with a unique **pixel art office view** where animated characters represent your running terminals.
+A VS Code extension that provides an **infinite canvas** for managing multiple terminals, with real terminal I/O, git worktree integration, and a unique **pixel art office view**.
 
 ## Features
 
-### 🖥️ Infinite Canvas
+### 🖥️ Infinite Canvas with Real Terminals
 - Create unlimited terminals on an infinite, pannable canvas
-- Drag and reposition terminals freely
+- **Real terminal I/O via node-pty** — full ANSI color support, interactive programs work
+- Drag, resize, and reposition terminals freely
 - Zoom in/out with mouse wheel (zoom toward cursor)
-- Resize terminals by dragging the bottom-right corner
 - Grid background for spatial orientation
+- **Keyboard input directly in terminal cards** — arrow keys, Ctrl+C, tab completion all work
 
-### 🚀 Preset Terminals
-- Quick-launch preset terminals (Shell, Node.js, Python, Vim)
-- Add custom presets via settings
-- Bottom dock for one-click terminal creation
+### 🔍 Terminal Search (Ctrl+P)
+- Quick-search terminals by name
+- Arrow keys to navigate results, Enter to jump
+- Instantly pans canvas and focuses the selected terminal
+- Each terminal has an editable name (double-click to rename)
+
+### 🚀 Preset Management
+- Quick-launch from dock: Shell, Node.js, Python, Vim
+- **Full preset manager UI** — add, edit, delete presets
+- Presets saved to VS Code settings
+- One-click custom terminal creation
 
 ### 🌿 Git Worktree Integration
-- Automatically create git worktrees for parallel development
-- Each worktree gets its own terminal on the canvas
-- Work on multiple branches of the same project simultaneously
+- Create git worktrees for parallel branch development
+- **Worktree manager UI** — list, open, and delete worktrees
+- Each worktree terminal auto-links with connection lines
 
 ### 🗺️ Minimap
-- Shows during canvas/terminal drag operations
-- Displays all terminals as miniature rectangles
-- Highlights viewport position and focused terminal
-- Auto-hides when not dragging
+- Appears during canvas/terminal drag
+- Shows all terminals as miniature rectangles
+- Highlights viewport and focused terminal
+- Auto-hides 1.5s after drag stops
+
+### 📐 Connection Lines
+- Dashed lines connect related terminals (parent ↔ child)
+- Worktree terminals auto-link to their origin
+- Lines update in real-time during drag
+
+### 💾 Layout Persistence
+- Terminal positions, sizes, and canvas view auto-saved
+- Restored on next session open
+- Saves to VS Code workspace state
 
 ### 🏢 Pixel Office View
-- Toggle a pixel art office scene
-- Each terminal spawns a pixel character (worker) at a desk
-- Workers have randomized appearance (hair color, shirt color)
-- **Animated behaviors:**
-  - Working at desk with typing animation
-  - Taking coffee breaks and walking around
-  - Showing status messages in speech bubbles
-  - Returning to desk after breaks
-- Status indicators: "Working...", "Done! ✓", "Taking a break~", "☕"
-- **New terminal = new pixel worker** automatically created
+- Toggle pixel art office scene
+- **Each terminal = one pixel worker** (auto-created)
+- Workers have randomized appearance (8 hair colors, 8 shirt colors)
+- **Status linked to real terminal activity:**
+  - Active terminal → worker typing at desk
+  - Idle terminal → worker takes coffee break
+  - Exited terminal → worker shows 💀
+- Autonomous behaviors: walking, stretching, thinking
+- Speech bubbles: "Working...", "Compiling...", "☕ Coffee time", "Done! ✓"
 
 ## Commands
 
 | Command | Shortcut | Description |
 |---------|----------|-------------|
-| `Infinite Terminal: Open Canvas` | `Ctrl+Shift+\`` | Open the infinite terminal canvas |
-| `Infinite Terminal: New Terminal` | `Ctrl+Shift+N` (when canvas active) | Create a new terminal |
-| `Infinite Terminal: Open Preset Terminal` | — | Pick from preset configurations |
-| `Infinite Terminal: Toggle Pixel Office View` | — | Toggle the office view |
-| `Infinite Terminal: Create Git Worktree Terminal` | — | Create a worktree + terminal |
+| `Open Canvas` | `Ctrl+Shift+\`` | Open the infinite terminal canvas |
+| `New Terminal` | `Ctrl+Shift+N` | Create a new terminal |
+| `Search Terminals` | `Ctrl+P` | Search and navigate to terminals |
+| `Open Preset Terminal` | — | Pick from preset configurations |
+| `Toggle Pixel Office View` | — | Toggle the office view |
+| `Create Git Worktree Terminal` | — | Create a worktree + terminal |
 
 ## Settings
 
@@ -73,20 +91,29 @@ npm run watch    # Development with hot reload
 npm run compile  # Production build
 ```
 
+Press F5 in VS Code to launch the extension in debug mode.
+
 ## Architecture
 
 ```
 src/
-├── extension.ts                    # Extension entry point, command registration
+├── extension.ts                    # Extension entry, command registration
+├── pty/
+│   └── PtyManager.ts              # node-pty process management with activity tracking
 ├── panels/
-│   └── InfiniteCanvasPanel.ts      # Webview panel with embedded HTML/CSS/JS
+│   ├── InfiniteCanvasPanel.ts      # Webview panel + PTY integration + layout persistence
+│   └── webviewHtml.ts              # Webview HTML/CSS/JS generation
+│       ├── ANSI parser/renderer    # Color code parsing for terminal output
 │       ├── Infinite Canvas         # Pan, zoom, grid, terminal cards
-│       ├── Terminal Management     # Create, drag, resize, close terminals
+│       ├── Terminal cards          # Real I/O, keyboard input, rename
+│       ├── Search modal            # Ctrl+P terminal search
+│       ├── Preset manager          # Add/edit/delete presets
+│       ├── Worktree manager        # List/create/delete worktrees
+│       ├── Connection lines        # SVG lines between related terminals
 │       ├── Minimap                 # Canvas overview during drag
-│       ├── Preset Dock             # Quick-launch terminal presets
-│       └── Pixel Office View       # Animated pixel art office scene
+│       └── Pixel Office View       # Animated pixel art office
 └── worktree/
-    └── WorktreeManager.ts          # Git worktree creation and management
+    └── WorktreeManager.ts          # Git worktree CRUD operations
 ```
 
 ## License
