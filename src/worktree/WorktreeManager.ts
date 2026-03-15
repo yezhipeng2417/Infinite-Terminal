@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { execSync, exec } from 'child_process';
+import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
