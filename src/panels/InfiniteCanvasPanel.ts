@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { WorktreeManager } from '../worktree/WorktreeManager';
 import { PtyManager } from '../pty/PtyManager';
 import { getWebviewHtml } from './webviewHtml';
@@ -64,7 +66,9 @@ export class InfiniteCanvasPanel {
         retainContextWhenHidden: true,
         localResourceRoots: [
           vscode.Uri.joinPath(context.extensionUri, 'media'),
-          vscode.Uri.joinPath(context.extensionUri, 'dist')
+          vscode.Uri.joinPath(context.extensionUri, 'dist'),
+          vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'xterm'),
+          vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'xterm-addon-fit'),
         ]
       }
     );
@@ -83,10 +87,6 @@ export class InfiniteCanvasPanel {
     this._worktreeManager = worktreeManager;
     this._ptyManager = new PtyManager();
 
-    if (!this._ptyManager.isAvailable) {
-      this._useFallback = true;
-    }
-
     // Set up PTY callbacks
     this._ptyManager.onData((id, data) => {
       this._panel.webview.postMessage({ type: 'terminalOutput', id, data });
@@ -100,7 +100,20 @@ export class InfiniteCanvasPanel {
       this._panel.webview.postMessage({ type: 'terminalActivity', id, isActive });
     });
 
-    this._panel.webview.html = getWebviewHtml();
+    const xtermJsUri = this._panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'xterm', 'lib', 'xterm.js')
+    );
+    const fitAddonUri = this._panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'xterm-addon-fit', 'lib', 'xterm-addon-fit.js')
+    );
+    // Inline xterm.css to avoid CSP/loading issues
+    const xtermCssPath = path.join(context.extensionPath, 'node_modules', 'xterm', 'css', 'xterm.css');
+    let xtermCss = '';
+    try { xtermCss = fs.readFileSync(xtermCssPath, 'utf8'); } catch {}
+    this._panel.webview.html = getWebviewHtml(
+      xtermJsUri.toString(), xtermCss, fitAddonUri.toString(),
+      this._panel.webview.cspSource
+    );
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
     vscode.commands.executeCommand('setContext', 'infiniteTerminal.canvasActive', true);
@@ -144,6 +157,9 @@ export class InfiniteCanvasPanel {
           case 'renameTerminal':
             this._renameTerminal(message.id, message.name);
             break;
+          case 'openPixelAgents':
+            vscode.commands.executeCommand('infiniteTerminal.toggleOfficeView');
+            break;
         }
       },
       null,
@@ -151,7 +167,8 @@ export class InfiniteCanvasPanel {
     );
 
     // Fallback: listen for VS Code terminal close
-    if (this._useFallback) {
+    // Listen for fallback terminal close
+    {
       vscode.window.onDidCloseTerminal((terminal) => {
         for (const [id, t] of this._fallbackTerminals) {
           if (t === terminal) {
@@ -174,7 +191,7 @@ export class InfiniteCanvasPanel {
     });
   }
 
-  private _doCreateTerminal(name?: string, command?: string, cwd?: string, parentId?: string) {
+  private async _doCreateTerminal(name?: string, command?: string, cwd?: string, parentId?: string) {
     this._terminalCounter++;
     const id = `term_${this._terminalCounter}_${Date.now()}`;
     const termName = name || `Terminal ${this._terminalCounter}`;
@@ -190,13 +207,8 @@ export class InfiniteCanvasPanel {
     };
     this._terminals.set(id, session);
 
-    if (!this._useFallback) {
-      const spawned = this._ptyManager.spawn(id, termName, command || '', termCwd, 80, 24);
-      if (!spawned) {
-        // Fall back to VS Code terminal for this one
-        this._spawnFallbackTerminal(id, termName, command, termCwd);
-      }
-    } else {
+    const spawned = await this._ptyManager.spawn(id, termName, command || '', termCwd, 80, 24);
+    if (!spawned) {
       this._spawnFallbackTerminal(id, termName, command, termCwd);
     }
 
@@ -206,7 +218,7 @@ export class InfiniteCanvasPanel {
       name: termName,
       cwd: termCwd,
       parentId: parentId || null,
-      hasPty: !this._useFallback,
+      hasPty: true,
     });
   }
 
@@ -275,9 +287,6 @@ export class InfiniteCanvasPanel {
     }
   }
 
-  public toggleOfficeView() {
-    this._panel.webview.postMessage({ type: 'toggleOfficeView' });
-  }
 
   public async createWorktreeTerminal(branchName: string) {
     const info = await this._worktreeManager.createWorktree(branchName);

@@ -116,6 +116,10 @@ src/
     └── WorktreeManager.ts          # Git worktree CRUD operations
 ```
 
+## Acknowledgments
+
+The pixel art studio view was inspired by the rendering approach in [pixel-agents](https://github.com/pablodelucca/pixel-agents) (MIT). All character designs and code are original.
+
 ## License
 
 MIT
