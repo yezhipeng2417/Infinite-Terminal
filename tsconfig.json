@@ -14,5 +14,6 @@
     "declaration": true,
     "declarationMap": true
   },
-  "exclude": ["node_modules", "dist", "media"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "media", "src/**/*.spec.ts"]
 }

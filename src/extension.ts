@@ -29,11 +29,12 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('infiniteTerminal.openPreset', async () => {
       const config = vscode.workspace.getConfiguration('infiniteTerminal');
-      const presets = config.get<Array<{ name: string; icon: string; command: string }>>('presets') || [];
+      const presets =
+        config.get<Array<{ name: string; icon: string; command: string }>>('presets') || [];
 
       const picked = await vscode.window.showQuickPick(
-        presets.map(p => ({ label: `$(${p.icon}) ${p.name}`, preset: p })),
-        { placeHolder: 'Select a terminal preset' }
+        presets.map((p) => ({ label: `$(${p.icon}) ${p.name}`, preset: p })),
+        { placeHolder: 'Select a terminal preset' },
       );
 
       if (picked) {
@@ -65,7 +66,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (currentPanel) {
         const branchName = await vscode.window.showInputBox({
           prompt: 'Enter branch name for the new worktree',
-          placeHolder: 'feature/my-branch'
+          placeHolder: 'feature/my-branch',
         });
         if (branchName) {
           currentPanel.createWorktreeTerminal(branchName);
@@ -78,7 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (panel) {
         panel.searchTerminals();
       }
-    })
+    }),
   );
 }
 

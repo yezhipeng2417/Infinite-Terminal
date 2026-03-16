@@ -61,7 +61,9 @@ export class WorktreeManager {
 
   listWorktrees(): WorktreeInfo[] {
     const repoRoot = this.getRepoRoot();
-    if (!repoRoot) { return []; }
+    if (!repoRoot) {
+      return [];
+    }
 
     try {
       const output = execSync('git worktree list --porcelain', { cwd: repoRoot }).toString();
@@ -90,7 +92,9 @@ export class WorktreeManager {
 
   async removeWorktree(worktreePath: string): Promise<boolean> {
     const repoRoot = this.getRepoRoot();
-    if (!repoRoot) { return false; }
+    if (!repoRoot) {
+      return false;
+    }
 
     try {
       execSync(`git worktree remove "${worktreePath}" --force`, { cwd: repoRoot });

@@ -1,3 +1,11 @@
+import {
+  DEFAULT_TERMINAL_HEIGHT,
+  DEFAULT_TERMINAL_WIDTH,
+  normalizeLayoutTerminal,
+  normalizeSavedLayout,
+  serializeLayoutState,
+} from './layoutPersistence';
+
 export function getWebviewHtml(): string {
   const nonce = getNonce();
   return `<!DOCTYPE html>
@@ -40,8 +48,20 @@ export function getWebviewHtml(): string {
   <!-- Search Modal -->
   <div id="search-modal" class="modal">
     <div class="modal-content search-modal-content">
-      <input id="search-input" type="text" placeholder="Search terminals by name..." autofocus />
-      <div id="search-results"></div>
+      <div class="field-group">
+        <label class="field-label" id="search-input-label" for="search-input">Search Terminals</label>
+        <input
+          id="search-input"
+          name="terminalSearch"
+          type="search"
+          placeholder="Search terminals by name..."
+          autocomplete="off"
+          enterkeyhint="search"
+          spellcheck="false"
+          autofocus
+        />
+      </div>
+      <div id="search-results" role="listbox" aria-label="Terminal search results"></div>
     </div>
   </div>
 
@@ -51,15 +71,39 @@ export function getWebviewHtml(): string {
       <h3>Manage Presets</h3>
       <div id="preset-list"></div>
       <div class="modal-form">
-        <input id="preset-name-input" type="text" placeholder="Name" />
-        <input id="preset-cmd-input" type="text" placeholder="Command (empty = shell)" />
-        <select id="preset-icon-input">
-          <option value="terminal">⬛ Terminal</option>
-          <option value="code">📝 Code</option>
-          <option value="edit">✏️ Edit</option>
-          <option value="server">🖥️ Server</option>
-          <option value="database">🗄️ Database</option>
-        </select>
+        <div class="field-group">
+          <label class="field-label" for="preset-name-input">Preset Name</label>
+          <input
+            id="preset-name-input"
+            name="presetName"
+            type="text"
+            placeholder="Name"
+            autocomplete="off"
+          />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="preset-cmd-input">Command</label>
+          <input
+            id="preset-cmd-input"
+            name="presetCommand"
+            type="text"
+            placeholder="Command (empty = shell)"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+          />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="preset-icon-input">Icon</label>
+          <select id="preset-icon-input" name="presetIcon" aria-label="Preset icon">
+            <option value="terminal">⬛ Terminal</option>
+            <option value="code">📝 Code</option>
+            <option value="edit">✏️ Edit</option>
+            <option value="server">🖥️ Server</option>
+            <option value="database">🗄️ Database</option>
+          </select>
+        </div>
         <button class="modal-btn" id="preset-add-btn">Add Preset</button>
       </div>
       <div class="modal-actions">
@@ -112,6 +156,7 @@ function getNonce() {
 // ============================================================
 const CSS_CONTENT = /*css*/ `
 :root {
+  color-scheme: dark;
   --bg: #1e1e1e; --surface: #252526; --border: #3c3c3c;
   --text: #cccccc; --accent: #007acc; --accent2: #1a8ad4;
   --term-bg: #0e0e0e; --header-bg: #2d2d2d;
@@ -151,9 +196,21 @@ body {
 .toolbar-btn {
   background:transparent; border:1px solid transparent; color:var(--text);
   padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px;
-  display:flex; align-items:center; gap:3px; transition:all 0.15s; white-space:nowrap;
+  display:flex; align-items:center; gap:3px;
+  transition:background-color 0.15s,border-color 0.15s,transform 0.15s;
+  white-space:nowrap;
 }
 .toolbar-btn:hover { background:var(--border); border-color:var(--accent); }
+.toolbar-btn:focus-visible,
+.preset-btn:focus-visible,
+.modal-btn:focus-visible,
+.terminal-close:focus-visible,
+.terminal-rename:focus-visible,
+.search-result:focus-visible {
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px rgba(0,122,204,0.25);
+}
 .toolbar-sep { width:1px; background:var(--border); margin:2px 3px; }
 
 /* Terminal Card */
@@ -187,15 +244,21 @@ body {
   border:1px solid var(--accent); color:var(--text); padding:1px 4px;
   border-radius:3px; outline:none;
 }
+.terminal-title-input:focus-visible {
+  outline:2px solid var(--accent2);
+  outline-offset:1px;
+}
 .terminal-cwd {
   font-size:10px; color:#888; max-width:180px; overflow:hidden;
   text-overflow:ellipsis; white-space:nowrap;
 }
-.terminal-close {
+.terminal-close,
+.terminal-rename {
   background:transparent; border:none; color:#888; cursor:pointer;
   font-size:14px; padding:2px 4px; border-radius:3px; line-height:1;
 }
 .terminal-close:hover { background:var(--danger); color:white; }
+.terminal-rename:hover { background:var(--border); color:var(--text); }
 
 /* Terminal Body - ANSI renderer */
 .terminal-body {
@@ -205,7 +268,10 @@ body {
   white-space:pre-wrap; word-break:break-all; color:#d4d4d4;
   position:relative; cursor:text;
 }
-.terminal-body:focus { outline:none; }
+.terminal-body:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:-2px;
+}
 .terminal-body .cursor-block {
   display:inline-block; width:7px; height:14px; background:var(--text);
   animation:blink 1s step-end infinite; vertical-align:text-bottom;
@@ -244,7 +310,7 @@ body {
   display:flex; flex-direction:column; align-items:center; gap:2px;
   background:transparent; border:1px solid transparent; color:var(--text);
   padding:6px 12px; border-radius:8px; cursor:pointer; font-size:11px;
-  transition:all 0.15s;
+  transition:background-color 0.15s,border-color 0.15s,transform 0.15s;
 }
 .preset-btn:hover { background:var(--border); border-color:var(--accent); transform:translateY(-2px); }
 .preset-icon { font-size:18px; }
@@ -266,20 +332,29 @@ body {
 .modal-content {
   background:var(--surface); border:1px solid var(--border); border-radius:10px;
   padding:16px 20px; min-width:400px; max-width:550px; max-height:70vh;
-  overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.6);
+  overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.6); overscroll-behavior:contain;
 }
 .modal-content h3 { margin-bottom:12px; font-size:15px; }
 .search-modal-content { padding:8px; min-width:450px; }
+.field-group { display:flex; flex-direction:column; gap:4px; }
+.field-label { font-size:12px; font-weight:600; color:#b8b8b8; }
 #search-input, .modal-content input, .modal-content select {
   width:100%; padding:8px 12px; background:var(--term-bg);
   border:1px solid var(--border); color:var(--text); border-radius:6px;
   font-size:14px; outline:none; margin-bottom:6px;
 }
-#search-input:focus, .modal-content input:focus { border-color:var(--accent); }
-#search-results { max-height:300px; overflow-y:auto; }
+#search-input:focus-visible,
+.modal-content input:focus-visible,
+.modal-content select:focus-visible,
+.modal-content button:focus-visible {
+  border-color:var(--accent);
+}
+#search-results { max-height:300px; overflow-y:auto; overscroll-behavior:contain; }
 .search-result {
-  padding:8px 12px; cursor:pointer; border-radius:4px; display:flex;
+  width:100%; padding:8px 12px; cursor:pointer; border-radius:4px; display:flex;
   align-items:center; gap:8px; font-size:13px;
+  border:1px solid transparent; background:transparent; color:var(--text);
+  text-align:left; font-family:inherit;
 }
 .search-result:hover, .search-result.selected { background:var(--border); }
 .search-result .sr-name { flex:1; font-weight:500; }
@@ -344,10 +419,19 @@ body {
 .ansi-bg-cyan { background:#9cdcfe; } .ansi-bg-white { background:#d4d4d4; }
 `;
 
+const WEBVIEW_LAYOUT_HELPERS = /*js*/ `
+const DEFAULT_TERMINAL_WIDTH = ${DEFAULT_TERMINAL_WIDTH};
+const DEFAULT_TERMINAL_HEIGHT = ${DEFAULT_TERMINAL_HEIGHT};
+const normalizeLayoutTerminal = ${normalizeLayoutTerminal.toString()};
+const normalizeSavedLayout = ${normalizeSavedLayout.toString()};
+const serializeLayoutState = ${serializeLayoutState.toString()};
+`;
+
 // ============================================================
 // JS
 // ============================================================
 const JS_CONTENT = /*js*/ `
+${WEBVIEW_LAYOUT_HELPERS}
 const vscode = acquireVsCodeApi();
 
 // ==================== STATE ====================
@@ -524,19 +608,31 @@ function updateMinimap() {
 }
 
 // ==================== TERMINAL CREATION ====================
-function createTerminalCard(id, name, cwd, hasPty, parentId) {
-  const w=600, h=400;
+function createTerminalCard(id, name, command, cwd, hasPty, parentId, w, h) {
+  const width = w ?? DEFAULT_TERMINAL_WIDTH;
+  const height = h ?? DEFAULT_TERMINAL_HEIGHT;
   const x=S.nextTermX, y=S.nextTermY;
   S.nextTermX += 40; S.nextTermY += 40;
   if (S.nextTermY > 500) { S.nextTermY = 50; S.nextTermX += 300; }
 
-  const t = { id, name, cwd, x, y, w, h, status:'active', outputBuf:'', hasPty, parentId: parentId||null };
+  const layout = normalizeLayoutTerminal({
+    id,
+    name,
+    command: command || '',
+    cwd,
+    x,
+    y,
+    w: width,
+    h: height,
+    parentId: parentId || null
+  });
+  const t = { ...layout, status:'active', outputBuf:'', hasPty };
   S.terminals.set(id, t);
 
   const card = document.createElement('div');
   card.className = 'terminal-card';
   card.id = 'term-' + id;
-  card.style.cssText = 'left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+h+'px';
+  card.style.cssText = 'left:'+x+'px;top:'+y+'px;width:'+width+'px;height:'+height+'px';
 
   const esc = s => { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; };
 
@@ -545,9 +641,10 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
       '<div class="terminal-status active"></div>' +
       '<span class="terminal-title" data-id="'+id+'" title="Double-click to rename">'+esc(name)+'</span>' +
       '<span class="terminal-cwd">'+esc(cwd||'')+'</span>' +
+      '<button class="terminal-rename" data-id="'+id+'" type="button" title="Rename terminal" aria-label="Rename terminal">✎</button>' +
       '<button class="terminal-close" data-id="'+id+'">✕</button>' +
     '</div>' +
-    '<div class="terminal-body" tabindex="0" data-id="'+id+'"></div>' +
+    '<div class="terminal-body"' + (hasPty ? ' tabindex="0"' : '') + ' data-id="'+id+'"></div>' +
     '<div class="terminal-resize" data-id="'+id+'"></div>';
 
   canvasEl.appendChild(card);
@@ -555,7 +652,8 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
   const header = card.querySelector('.terminal-header');
   const body = card.querySelector('.terminal-body');
   const closeBtn = card.querySelector('.terminal-close');
-  const titleEl = card.querySelector('.terminal-title');
+  const renameBtn = card.querySelector('.terminal-rename');
+  let titleEl = card.querySelector('.terminal-title');
   const resizeHandle = card.querySelector('.terminal-resize');
 
   // Drag header
@@ -565,6 +663,7 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
 
   // Keyboard input for real PTY
   body.addEventListener('keydown', e => {
+    if (!t.hasPty) return;
     e.preventDefault(); e.stopPropagation();
     let data = '';
     if (e.key === 'Enter') data = '\\r';
@@ -591,13 +690,14 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
     if (data) vscode.postMessage({ type:'terminalInput', id, data });
   });
 
-  // Double-click title to rename
-  titleEl.addEventListener('dblclick', e => {
+  function startRename(e) {
     e.stopPropagation();
+    const currentTitle = card.querySelector('.terminal-title');
+    if (!currentTitle) return;
     const input = document.createElement('input');
     input.className = 'terminal-title-input';
     input.value = t.name;
-    titleEl.replaceWith(input);
+    currentTitle.replaceWith(input);
     input.focus();
     input.select();
     const finish = () => {
@@ -608,18 +708,19 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
       newTitle.dataset.id = id;
       newTitle.title = 'Double-click to rename';
       newTitle.textContent = newName;
-      newTitle.addEventListener('dblclick', e2 => {
-        e2.stopPropagation();
-        titleEl.dispatchEvent(new Event('dblclick'));
-      });
+      newTitle.addEventListener('dblclick', startRename);
       input.replaceWith(newTitle);
+      titleEl = newTitle;
       vscode.postMessage({ type:'renameTerminal', id, name:newName });
       // Update office worker name
       if (OFFICE.workers.has(id)) OFFICE.workers.get(id).name = newName;
     };
     input.addEventListener('blur', finish);
     input.addEventListener('keydown', e2 => { if(e2.key==='Enter') input.blur(); if(e2.key==='Escape'){input.value=t.name;input.blur();} });
-  });
+  }
+  // Double-click title or use explicit button to rename
+  titleEl.addEventListener('dblclick', startRename);
+  renameBtn.addEventListener('click', startRename);
 
   // Resize
   resizeHandle.addEventListener('mousedown', e => startResize(e,id));
@@ -650,13 +751,17 @@ function appendTerminalOutput(id, data) {
 }
 
 function focusTerminal(id) {
+  const t = S.terminals.get(id);
+  if (!t) return;
   document.querySelectorAll('.terminal-card.focused').forEach(c => c.classList.remove('focused'));
   const card = document.getElementById('term-'+id);
   if (card) {
     card.classList.add('focused');
     card.style.zIndex = ++S.zCounter;
     S.focusedTerminal = id;
-    card.querySelector('.terminal-body')?.focus();
+    if (t.hasPty) {
+      card.querySelector('.terminal-body')?.focus();
+    }
   }
 }
 
@@ -848,18 +953,19 @@ function renderSearchResults(query) {
   const q = query.toLowerCase();
   for (const [id, t] of S.terminals) {
     if (q && !t.name.toLowerCase().includes(q) && !(t.cwd||'').toLowerCase().includes(q)) continue;
-    const div = document.createElement('div');
-    div.className = 'search-result';
-    div.dataset.id = id;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'search-result';
+    button.dataset.id = id;
     const statusCls = t.status === 'active' ? 'background:#4ec9b0' : t.status === 'idle' ? 'background:#dcdcaa' : 'background:#f44747';
-    div.innerHTML = '<div class="sr-status" style="'+statusCls+'"></div>' +
+    button.innerHTML = '<div class="sr-status" style="'+statusCls+'"></div>' +
       '<span class="sr-name">' + escHtml(t.name) + '</span>' +
       '<span class="sr-cwd">' + escHtml(t.cwd||'') + '</span>';
-    div.addEventListener('click', () => {
+    button.addEventListener('click', () => {
       navigateToTerminal(id);
       $('search-modal').classList.remove('visible');
     });
-    container.appendChild(div);
+    container.appendChild(button);
   }
   highlightSearchResult();
 }
@@ -986,26 +1092,30 @@ let saveTimer = null;
 function autoSaveLayout() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const terminals = [];
-    for (const [id, t] of S.terminals) {
-      terminals.push({ id:t.id, name:t.name, command:'', cwd:t.cwd, x:t.x, y:t.y, w:t.w, h:t.h, parentId:t.parentId||null });
-    }
-    vscode.postMessage({ type:'saveLayout', layout:{ terminals, canvasX:S.canvasX, canvasY:S.canvasY, zoom:S.zoom }});
+    const layout = serializeLayoutState(S.terminals.values(), S.canvasX, S.canvasY, S.zoom);
+    vscode.postMessage({ type:'saveLayout', layout });
   }, 1000);
 }
 
 function restoreLayout(layout) {
-  if (!layout || !layout.terminals) return;
-  S.canvasX = layout.canvasX || 0;
-  S.canvasY = layout.canvasY || 0;
-  S.zoom = layout.zoom || 1;
+  const normalizedLayout = normalizeSavedLayout(layout);
+  if (!normalizedLayout) return;
+  S.canvasX = normalizedLayout.canvasX;
+  S.canvasY = normalizedLayout.canvasY;
+  S.zoom = normalizedLayout.zoom;
   updateTransform();
-  // We restore positions but terminals need to be re-created via backend
-  // Send info about desired positions
-  for (const t of layout.terminals) {
+  for (const t of normalizedLayout.terminals) {
     S.nextTermX = t.x;
     S.nextTermY = t.y;
-    vscode.postMessage({ type:'createTerminal', name:t.name, command:t.command||'', cwd:t.cwd, parentId:t.parentId });
+    vscode.postMessage({
+      type:'createTerminal',
+      name:t.name,
+      command:t.command,
+      cwd:t.cwd,
+      parentId:t.parentId,
+      w:t.w,
+      h:t.h
+    });
   }
 }
 
@@ -1273,7 +1383,7 @@ window.addEventListener('message', e => {
   const m = e.data;
   switch (m.type) {
     case 'terminalCreated':
-      createTerminalCard(m.id, m.name, m.cwd, m.hasPty, m.parentId);
+      createTerminalCard(m.id, m.name, m.command, m.cwd, m.hasPty, m.parentId, m.w, m.h);
       break;
     case 'terminalOutput':
       appendTerminalOutput(m.id, m.data);
