@@ -2,17 +2,17 @@
   "name": "infinite-terminal",
   "displayName": "Infinite Terminal - 无限终端",
   "description": "An infinite canvas for managing multiple terminals with pixel art office view",
-  "version": "0.2.0",
-  "publisher": "infinite-terminal",
+  "version": "0.3.1",
+  "publisher": "LouisYeah",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/andyyang/infinite-terminal"
+    "url": "https://github.com/yezhipeng2417/Infinite-Terminal.git"
   },
   "bugs": {
-    "url": "https://github.com/andyyang/infinite-terminal/issues"
+    "url": "https://github.com/yezhipeng2417/Infinite-Terminal/issues"
   },
-  "homepage": "https://github.com/andyyang/infinite-terminal#readme",
+  "homepage": "https://github.com/yezhipeng2417/Infinite-Terminal#readme",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -92,24 +92,9 @@
           "type": "array",
           "default": [
             {
-              "name": "Shell",
+              "name": "Claude Code",
               "icon": "terminal",
-              "command": ""
-            },
-            {
-              "name": "Node.js",
-              "icon": "code",
-              "command": "node"
-            },
-            {
-              "name": "Python",
-              "icon": "code",
-              "command": "python3"
-            },
-            {
-              "name": "Vim",
-              "icon": "edit",
-              "command": "vim"
+              "command": "claude"
             }
           ],
           "description": "Preset terminal configurations"
@@ -181,6 +166,8 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "node-pty": "^1.0.0"
+    "node-pty": "^1.0.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
   }
 }

@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { WorktreeManager } from '../worktree/WorktreeManager';
 import { PtyManager } from '../pty/PtyManager';
 import {
@@ -52,6 +54,8 @@ export class InfiniteCanvasPanel {
         localResourceRoots: [
           vscode.Uri.joinPath(context.extensionUri, 'media'),
           vscode.Uri.joinPath(context.extensionUri, 'dist'),
+          vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'xterm'),
+          vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'xterm-addon-fit'),
         ],
       },
     );
@@ -87,7 +91,38 @@ export class InfiniteCanvasPanel {
       this._panel.webview.postMessage({ type: 'terminalActivity', id, isActive });
     });
 
-    this._panel.webview.html = getWebviewHtml();
+    const xtermJsUri = this._panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'xterm', 'lib', 'xterm.js'),
+    );
+    const fitAddonUri = this._panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        context.extensionUri,
+        'node_modules',
+        'xterm-addon-fit',
+        'lib',
+        'xterm-addon-fit.js',
+      ),
+    );
+    // Inline xterm.css to avoid CSP/loading issues
+    const xtermCssPath = path.join(
+      context.extensionPath,
+      'node_modules',
+      'xterm',
+      'css',
+      'xterm.css',
+    );
+    let xtermCss = '';
+    try {
+      xtermCss = fs.readFileSync(xtermCssPath, 'utf8');
+    } catch {
+      /* noop */
+    }
+    this._panel.webview.html = getWebviewHtml(
+      xtermJsUri.toString(),
+      xtermCss,
+      fitAddonUri.toString(),
+      this._panel.webview.cspSource,
+    );
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
     vscode.commands.executeCommand('setContext', 'infiniteTerminal.canvasActive', true);
@@ -137,6 +172,9 @@ export class InfiniteCanvasPanel {
             break;
           case 'renameTerminal':
             this._renameTerminal(message.id, message.name);
+            break;
+          case 'openPixelAgents':
+            vscode.commands.executeCommand('infiniteTerminal.toggleOfficeView');
             break;
         }
       },
@@ -299,10 +337,6 @@ export class InfiniteCanvasPanel {
     } else {
       vscode.window.showErrorMessage('Failed to remove worktree');
     }
-  }
-
-  public toggleOfficeView() {
-    this._panel.webview.postMessage({ type: 'toggleOfficeView' });
   }
 
   public async createWorktreeTerminal(branchName: string) {

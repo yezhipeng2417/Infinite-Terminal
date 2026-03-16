@@ -36,6 +36,8 @@ vi.mock('vscode', () => {
     reveal: vi.fn(),
     dispose: vi.fn(),
     webview: {
+      asWebviewUri: vi.fn(() => ({ toString: () => '/webview-resource' })),
+      cspSource: 'https://csp.test',
       html: '',
       postMessage: postMessageMock,
       onDidReceiveMessage: vi.fn(
@@ -109,6 +111,7 @@ describe('InfiniteCanvasPanel', () => {
 
   function createPanel() {
     const context = {
+      extensionPath: '/extension',
       extensionUri: { fsPath: '/extension' },
       workspaceState: {
         get: vi.fn(),
