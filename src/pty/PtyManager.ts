@@ -1,4 +1,6 @@
 import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as cp from 'child_process';
 
 // node-pty is an optional native dependency
@@ -7,6 +9,28 @@ let pty: any;
 let ptyReady: Promise<void>;
 
 const log = (msg: string) => console.log(`[InfiniteTerminal] ${msg}`);
+
+// Per-terminal shell history directory
+const HISTORY_DIR = path.join(os.homedir(), '.infinite-terminal', 'history');
+
+function ensureHistoryDir() {
+  try {
+    fs.mkdirSync(HISTORY_DIR, { recursive: true });
+  } catch (e: any) {
+    log(`failed to create history dir: ${e.message}`);
+  }
+}
+
+function getHistoryEnv(id: string): Record<string, string> {
+  ensureHistoryDir();
+  // Sanitize id for use as filename
+  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const histFile = path.join(HISTORY_DIR, safeId);
+  return {
+    HISTFILE: histFile, // works for both bash and zsh
+    LESSHISTFILE: '-', // disable less history cross-contamination
+  };
+}
 
 function tryLoadPty(): boolean {
   try {
@@ -138,12 +162,13 @@ export class PtyManager {
     // Try node-pty first
     if (pty) {
       try {
+        const histEnv = getHistoryEnv(id);
         const proc = pty.spawn(shell, [], {
           name: 'xterm-256color',
           cols: cols || 80,
           rows: rows || 24,
           cwd: spawnCwd,
-          env: { ...process.env, TERM: 'xterm-256color' },
+          env: { ...process.env, TERM: 'xterm-256color', ...histEnv },
         });
 
         const ptyProc: PtyProcess = {
@@ -179,7 +204,6 @@ export class PtyManager {
     log(`using fallback for ${id}`);
     try {
       // Find a default shell only if no command is specified
-      const fs = require('fs');
       let fallbackShell = shell;
       if (!shellCommand) {
         // No command given, find default shell
@@ -193,27 +217,25 @@ export class PtyManager {
       log(`fallback shell resolved: ${fallbackShell}`);
 
       // Use script(1) to create a real PTY wrapper (works on Linux & macOS)
+      const histEnv = getHistoryEnv(id);
+      const fallbackEnv = {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLUMNS: String(cols || 80),
+        LINES: String(rows || 24),
+        ...histEnv,
+      };
       let child;
       if (process.platform === 'linux') {
         child = cp.spawn('script', ['-qc', fallbackShell, '/dev/null'], {
           cwd: spawnCwd,
-          env: {
-            ...process.env,
-            TERM: 'xterm-256color',
-            COLUMNS: String(cols || 80),
-            LINES: String(rows || 24),
-          },
+          env: fallbackEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
         child = cp.spawn(fallbackShell, ['-i'], {
           cwd: spawnCwd,
-          env: {
-            ...process.env,
-            TERM: 'xterm-256color',
-            COLUMNS: String(cols || 80),
-            LINES: String(rows || 24),
-          },
+          env: fallbackEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       }
