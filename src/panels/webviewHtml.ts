@@ -1,4 +1,9 @@
-export function getWebviewHtml(xtermJsUri: string, xtermCssInline: string, fitAddonUri: string, cspSource: string): string {
+export function getWebviewHtml(
+  xtermJsUri: string,
+  xtermCssInline: string,
+  fitAddonUri: string,
+  cspSource: string,
+): string {
   const nonce = getNonce();
   return `<!DOCTYPE html>
 <html lang="en">

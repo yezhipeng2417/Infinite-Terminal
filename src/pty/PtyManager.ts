@@ -13,7 +13,9 @@ function tryLoadPty(): boolean {
     pty = require('node-pty');
     log(`node-pty require OK, platform=${process.platform}, arch=${process.arch}`);
     const test = pty.spawn(process.platform === 'win32' ? 'cmd.exe' : '/bin/sh', ['-c', 'exit 0'], {
-      cols: 1, rows: 1, cwd: os.homedir(),
+      cols: 1,
+      rows: 1,
+      cwd: os.homedir(),
     });
     test.kill();
     log('node-pty sanity check passed');
@@ -37,8 +39,12 @@ if (!tryLoadPty()) {
         shell: true,
       });
       let rebuildOutput = '';
-      rebuild.stdout?.on('data', (d: Buffer) => { rebuildOutput += d.toString(); });
-      rebuild.stderr?.on('data', (d: Buffer) => { rebuildOutput += d.toString(); });
+      rebuild.stdout?.on('data', (d: Buffer) => {
+        rebuildOutput += d.toString();
+      });
+      rebuild.stderr?.on('data', (d: Buffer) => {
+        rebuildOutput += d.toString();
+      });
       rebuild.on('close', (code) => {
         log(`npm rebuild exited with code ${code}`);
         log(`rebuild output: ${rebuildOutput.slice(-500)}`);
@@ -51,8 +57,17 @@ if (!tryLoadPty()) {
         }
         resolve();
       });
-      rebuild.on('error', (e) => { log(`rebuild spawn error: ${e.message}`); resolve(); });
-      setTimeout(() => { try { rebuild.kill(); } catch {} log('rebuild timed out'); resolve(); }, 30000);
+      rebuild.on('error', (e) => {
+        log(`rebuild spawn error: ${e.message}`);
+        resolve();
+      });
+      setTimeout(() => {
+        try {
+          rebuild.kill();
+        } catch {}
+        log('rebuild timed out');
+        resolve();
+      }, 30000);
     } catch (e: any) {
       log(`rebuild failed to start: ${e.message}`);
       resolve();
@@ -91,12 +106,25 @@ export class PtyManager {
     return true; // always available - falls back to child_process
   }
 
-  onData(cb: PtyDataCallback) { this._onData = cb; }
-  onExit(cb: PtyExitCallback) { this._onExit = cb; }
-  onActivity(cb: PtyActivityCallback) { this._onActivity = cb; }
+  onData(cb: PtyDataCallback) {
+    this._onData = cb;
+  }
+  onExit(cb: PtyExitCallback) {
+    this._onExit = cb;
+  }
+  onActivity(cb: PtyActivityCallback) {
+    this._onActivity = cb;
+  }
 
-  async spawn(id: string, name: string, shellCommand: string, cwd: string, cols: number, rows: number): Promise<boolean> {
-    log(`spawn called: id=${id}, shell=${shellCommand||'default'}, cwd=${cwd}, pty=${!!pty}`);
+  async spawn(
+    id: string,
+    name: string,
+    shellCommand: string,
+    cwd: string,
+    cols: number,
+    rows: number,
+  ): Promise<boolean> {
+    log(`spawn called: id=${id}, shell=${shellCommand || 'default'}, cwd=${cwd}, pty=${!!pty}`);
     await ptyReady;
     log(`ptyReady resolved, pty=${!!pty}`);
     const shell = shellCommand || this._getDefaultShell();
@@ -115,8 +143,13 @@ export class PtyManager {
         });
 
         const ptyProc: PtyProcess = {
-          id, name, cwd: spawnCwd, process: proc,
-          lastDataTime: Date.now(), totalBytes: 0, isFallback: false,
+          id,
+          name,
+          cwd: spawnCwd,
+          process: proc,
+          lastDataTime: Date.now(),
+          totalBytes: 0,
+          isFallback: false,
         };
 
         proc.onData((data: string) => {
@@ -147,7 +180,10 @@ export class PtyManager {
       if (!shellCommand) {
         // No command given, find default shell
         for (const sh of ['/bin/zsh', '/bin/bash', '/bin/sh']) {
-          if (fs.existsSync(sh)) { fallbackShell = sh; break; }
+          if (fs.existsSync(sh)) {
+            fallbackShell = sh;
+            break;
+          }
         }
       }
       log(`fallback shell resolved: ${fallbackShell}`);
@@ -157,22 +193,36 @@ export class PtyManager {
       if (process.platform === 'linux') {
         child = cp.spawn('script', ['-qc', fallbackShell, '/dev/null'], {
           cwd: spawnCwd,
-          env: { ...process.env, TERM: 'xterm-256color', COLUMNS: String(cols || 80), LINES: String(rows || 24) },
+          env: {
+            ...process.env,
+            TERM: 'xterm-256color',
+            COLUMNS: String(cols || 80),
+            LINES: String(rows || 24),
+          },
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } else {
         child = cp.spawn(fallbackShell, ['-i'], {
           cwd: spawnCwd,
-          env: { ...process.env, TERM: 'xterm-256color', COLUMNS: String(cols || 80), LINES: String(rows || 24) },
+          env: {
+            ...process.env,
+            TERM: 'xterm-256color',
+            COLUMNS: String(cols || 80),
+            LINES: String(rows || 24),
+          },
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       }
 
       const ptyProc: PtyProcess = {
-        id, name, cwd: spawnCwd,
+        id,
+        name,
+        cwd: spawnCwd,
         process: {
           _child: child,
-          write: (data: string) => { child.stdin?.write(data); },
+          write: (data: string) => {
+            child.stdin?.write(data);
+          },
           resize: (c: number, r: number) => {
             // Send SIGWINCH and update env for resize
             try {
@@ -183,9 +233,13 @@ export class PtyManager {
               child.stdin?.write(`stty cols ${c} rows ${r}\n`);
             } catch {}
           },
-          kill: () => { child.kill(); },
+          kill: () => {
+            child.kill();
+          },
         },
-        lastDataTime: Date.now(), totalBytes: 0, isFallback: true,
+        lastDataTime: Date.now(),
+        totalBytes: 0,
+        isFallback: true,
       };
 
       child.stdout?.on('data', (data: Buffer) => {
@@ -225,22 +279,28 @@ export class PtyManager {
   resize(id: string, cols: number, rows: number) {
     const proc = this._processes.get(id);
     if (proc) {
-      try { proc.process.resize(cols, rows); } catch {}
+      try {
+        proc.process.resize(cols, rows);
+      } catch {}
     }
   }
 
   kill(id: string) {
     const proc = this._processes.get(id);
     if (proc) {
-      try { proc.process.kill(); } catch {}
+      try {
+        proc.process.kill();
+      } catch {}
       this._processes.delete(id);
     }
   }
 
   isActive(id: string): boolean {
     const proc = this._processes.get(id);
-    if (!proc) { return false; }
-    return (Date.now() - proc.lastDataTime) < 3000;
+    if (!proc) {
+      return false;
+    }
+    return Date.now() - proc.lastDataTime < 3000;
   }
 
   getProcess(id: string): PtyProcess | undefined {
@@ -249,7 +309,7 @@ export class PtyManager {
 
   private _checkActivity() {
     for (const [id, proc] of this._processes) {
-      const active = (Date.now() - proc.lastDataTime) < 3000;
+      const active = Date.now() - proc.lastDataTime < 3000;
       this._onActivity?.(id, active);
     }
   }
