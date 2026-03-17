@@ -103,12 +103,35 @@ function getNonce() {
 // CSS
 // ============================================================
 const CSS_CONTENT = /*css*/ `
-:root {
+/* Dark theme (default) */
+:root, body.vscode-dark {
   --bg: #1e1e1e; --surface: #252526; --border: #3c3c3c;
   --text: #cccccc; --accent: #007acc; --accent2: #1a8ad4;
-  --term-bg: #0e0e0e; --header-bg: #2d2d2d;
+  --term-bg: #0e0e0e; --term-fg: #d4d4d4; --header-bg: #2d2d2d;
   --danger: #f44747; --success: #4ec9b0; --warning: #dcdcaa;
   --grid: rgba(255,255,255,0.03);
+  --cursor: #d4d4d4; --selection: #264f78;
+  --shadow: rgba(0,0,0,0.5); --shadow-hover: rgba(0,0,0,0.6);
+}
+/* Light theme */
+body.vscode-light {
+  --bg: #f3f3f3; --surface: #ffffff; --border: #e0e0e0;
+  --text: #333333; --accent: #007acc; --accent2: #1a8ad4;
+  --term-bg: #ffffff; --term-fg: #1e1e1e; --header-bg: #f0f0f0;
+  --danger: #d32f2f; --success: #388e3c; --warning: #f57c00;
+  --grid: rgba(0,0,0,0.04);
+  --cursor: #1e1e1e; --selection: #add6ff;
+  --shadow: rgba(0,0,0,0.12); --shadow-hover: rgba(0,0,0,0.18);
+}
+/* High contrast */
+body.vscode-high-contrast {
+  --bg: #000000; --surface: #0a0a0a; --border: #6fc3df;
+  --text: #ffffff; --accent: #6fc3df; --accent2: #6fc3df;
+  --term-bg: #000000; --term-fg: #ffffff; --header-bg: #0a0a0a;
+  --danger: #f48771; --success: #89d185; --warning: #cca700;
+  --grid: rgba(255,255,255,0.06);
+  --cursor: #ffffff; --selection: #264f78;
+  --shadow: rgba(255,255,255,0.1); --shadow-hover: rgba(255,255,255,0.15);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
@@ -138,7 +161,7 @@ body {
   position:fixed; top:10px; left:50%; transform:translateX(-50%);
   display:flex; gap:4px; background:var(--surface); border:1px solid var(--border);
   border-radius:8px; padding:5px 8px; z-index:1000;
-  box-shadow:0 4px 16px rgba(0,0,0,0.4);
+  box-shadow:0 4px 16px var(--shadow);
 }
 .toolbar-btn {
   background:transparent; border:1px solid transparent; color:var(--text);
@@ -152,11 +175,11 @@ body {
 .terminal-card {
   position:absolute; min-width:0; min-height:0;
   background:var(--surface); border:1px solid var(--border); border-radius:8px;
-  overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.5);
+  overflow:hidden; box-shadow:0 4px 20px var(--shadow);
   display:flex; flex-direction:column; transition:box-shadow 0.2s;
 }
-.terminal-card:hover { box-shadow:0 6px 28px rgba(0,0,0,0.6); }
-.terminal-card.focused { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent),0 6px 28px rgba(0,0,0,0.6); }
+.terminal-card:hover { box-shadow:0 6px 28px var(--shadow-hover); }
+.terminal-card.focused { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent),0 6px 28px var(--shadow-hover); }
 
 .terminal-header {
   display:flex; align-items:center; padding:5px 8px;
@@ -223,7 +246,7 @@ body {
   position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
   display:flex; gap:6px; background:var(--surface); border:1px solid var(--border);
   border-radius:12px; padding:6px 12px; z-index:1000;
-  box-shadow:0 4px 16px rgba(0,0,0,0.4);
+  box-shadow:0 4px 16px var(--shadow);
 }
 .preset-btn {
   display:flex; flex-direction:column; align-items:center; gap:2px;
@@ -251,7 +274,7 @@ body {
 .modal-content {
   background:var(--surface); border:1px solid var(--border); border-radius:10px;
   padding:16px 20px; min-width:400px; max-width:550px; max-height:70vh;
-  overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.6);
+  overflow-y:auto; box-shadow:0 8px 32px var(--shadow-hover);
 }
 .modal-content h3 { margin-bottom:12px; font-size:15px; }
 .search-modal-content { padding:8px; min-width:450px; }
@@ -452,16 +475,17 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
   closeBtn.addEventListener('click', () => closeTerminal(id));
   card.addEventListener('mousedown', () => focusTerminal(id));
 
-  // xterm.js terminal instance
+  // xterm.js terminal instance - theme follows VS Code
+  const cs = getComputedStyle(document.body);
   const term = new Terminal({
     cursorBlink: true,
     fontSize: 13,
     fontFamily: "'Cascadia Code','Fira Code','Consolas','Courier New',monospace",
     theme: {
-      background: '#0e0e0e',
-      foreground: '#d4d4d4',
-      cursor: '#d4d4d4',
-      selectionBackground: '#264f78',
+      background: cs.getPropertyValue('--term-bg').trim(),
+      foreground: cs.getPropertyValue('--term-fg').trim(),
+      cursor: cs.getPropertyValue('--cursor').trim(),
+      selectionBackground: cs.getPropertyValue('--selection').trim(),
     },
     allowTransparency: true,
     scrollback: 5000,
@@ -1000,6 +1024,21 @@ document.addEventListener('keydown', e => {
     document.querySelectorAll('.modal.visible').forEach(m => m.classList.remove('visible'));
   }
 });
+
+// ==================== THEME OBSERVER ====================
+// Update xterm themes when VS Code theme changes
+new MutationObserver(() => {
+  const cs = getComputedStyle(document.body);
+  const theme = {
+    background: cs.getPropertyValue('--term-bg').trim(),
+    foreground: cs.getPropertyValue('--term-fg').trim(),
+    cursor: cs.getPropertyValue('--cursor').trim(),
+    selectionBackground: cs.getPropertyValue('--selection').trim(),
+  };
+  for (const [_, t] of S.terminals) {
+    if (t.xterm) t.xterm.options.theme = theme;
+  }
+}).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
 // ==================== INIT ====================
 updateTransform();
