@@ -3,3 +3,6 @@ dist/
 out/
 *.vsix
 .vscode-test/
+coverage/
+.husky/_/
+build-linux/
