@@ -5,4 +5,4 @@ out/
 .vscode-test/
 coverage/
 .husky/_/
-package-lock.json
+build-linux/

@@ -7,6 +7,10 @@ src/
 node_modules/
 !node_modules/node-pty/
 !node_modules/node-pty/**
+!node_modules/xterm/
+!node_modules/xterm/**
+!node_modules/xterm-addon-fit/
+!node_modules/xterm-addon-fit/**
 .gitignore
 .prettierrc
 .prettierignore

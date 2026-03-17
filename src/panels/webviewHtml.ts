@@ -1,12 +1,15 @@
-export function getWebviewHtml(): string {
+export function getWebviewHtml(xtermJsUri: string, xtermCssInline: string, fitAddonUri: string, cspSource: string): string {
   const nonce = getNonce();
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} data:; img-src data:;">
   <title>Infinite Terminal</title>
+  <style>${xtermCssInline}</style>
+  <script nonce="${nonce}" src="${xtermJsUri}"></script>
+  <script nonce="${nonce}" src="${fitAddonUri}"></script>
   <style>${CSS_CONTENT}</style>
 </head>
 <body>
@@ -25,7 +28,7 @@ export function getWebviewHtml(): string {
     <button class="toolbar-btn" id="btn-reset-zoom">🔍 100%</button>
     <div class="toolbar-sep"></div>
     <button class="toolbar-btn" id="btn-preset-mgr" title="Manage Presets">⚙️ Presets</button>
-    <button class="toolbar-btn" id="btn-office-view" title="Pixel Office View">🏢 Office</button>
+    <!-- <button class="toolbar-btn" id="btn-office-view" title="Pixel Office View">🏢 Office</button> -->
   </div>
 
   <!-- Preset Dock -->
@@ -78,15 +81,6 @@ export function getWebviewHtml(): string {
         <button class="modal-btn" id="worktree-new-btn">🌿 New Worktree</button>
         <button class="modal-btn modal-btn-secondary" id="worktree-close-btn">Close</button>
       </div>
-    </div>
-  </div>
-
-  <!-- Office View Overlay -->
-  <div id="office-view">
-    <canvas id="office-canvas"></canvas>
-    <div id="office-toolbar">
-      <button class="toolbar-btn" id="btn-close-office">← Canvas</button>
-      <button class="toolbar-btn" id="btn-new-terminal-office">⬛ New Terminal</button>
     </div>
   </div>
 
@@ -197,20 +191,13 @@ body {
 }
 .terminal-close:hover { background:var(--danger); color:white; }
 
-/* Terminal Body - ANSI renderer */
+/* Terminal Body - xterm.js container */
 .terminal-body {
-  flex:1; background:var(--term-bg); padding:4px 6px;
-  font-family:'Cascadia Code','Fira Code','Consolas','Courier New',monospace;
-  font-size:13px; line-height:1.35; overflow-y:auto; overflow-x:hidden;
-  white-space:pre-wrap; word-break:break-all; color:#d4d4d4;
-  position:relative; cursor:text;
+  flex:1; background:var(--term-bg);
+  position:relative; overflow:hidden;
 }
-.terminal-body:focus { outline:none; }
-.terminal-body .cursor-block {
-  display:inline-block; width:7px; height:14px; background:var(--text);
-  animation:blink 1s step-end infinite; vertical-align:text-bottom;
-}
-@keyframes blink { 50%{opacity:0;} }
+.terminal-body .xterm { height:100%; }
+.terminal-body .xterm-viewport { overflow-y:auto; }
 
 /* Resize handle */
 .terminal-resize {
@@ -312,36 +299,7 @@ body {
   background:transparent; border:none; color:var(--accent); cursor:pointer; font-size:12px;
 }
 
-/* Office View */
-#office-view {
-  position:fixed; top:0; left:0; width:100%; height:100%;
-  z-index:2000; display:none; background:#2a1f3d;
-}
-#office-view.visible { display:block; }
-#office-canvas { width:100%; height:100%; image-rendering:pixelated; }
-#office-toolbar {
-  position:fixed; top:10px; left:50%; transform:translateX(-50%);
-  display:flex; gap:6px; background:rgba(40,30,60,0.9);
-  border:1px solid rgba(100,80,140,0.5); border-radius:8px; padding:6px 10px; z-index:2001;
-}
 
-/* ANSI color classes */
-.ansi-bold { font-weight:bold; }
-.ansi-dim { opacity:0.7; }
-.ansi-italic { font-style:italic; }
-.ansi-underline { text-decoration:underline; }
-.ansi-fg-black { color:#555; } .ansi-fg-red { color:#f44747; }
-.ansi-fg-green { color:#4ec9b0; } .ansi-fg-yellow { color:#dcdcaa; }
-.ansi-fg-blue { color:#569cd6; } .ansi-fg-magenta { color:#c586c0; }
-.ansi-fg-cyan { color:#9cdcfe; } .ansi-fg-white { color:#d4d4d4; }
-.ansi-fg-bright-black { color:#888; } .ansi-fg-bright-red { color:#f77; }
-.ansi-fg-bright-green { color:#6fdfb0; } .ansi-fg-bright-yellow { color:#ffe680; }
-.ansi-fg-bright-blue { color:#7bbbf0; } .ansi-fg-bright-magenta { color:#e0a0e0; }
-.ansi-fg-bright-cyan { color:#b0efff; } .ansi-fg-bright-white { color:#ffffff; }
-.ansi-bg-black { background:#555; } .ansi-bg-red { background:#f44747; }
-.ansi-bg-green { background:#4ec9b0; } .ansi-bg-yellow { background:#dcdcaa; }
-.ansi-bg-blue { background:#569cd6; } .ansi-bg-magenta { background:#c586c0; }
-.ansi-bg-cyan { background:#9cdcfe; } .ansi-bg-white { background:#d4d4d4; }
 `;
 
 // ============================================================
@@ -358,7 +316,7 @@ const S = {
   dragTarget: null, dragOffsetX: 0, dragOffsetY: 0,
   lastMouseX: 0, lastMouseY: 0,
   nextTermX: 50, nextTermY: 50,
-  officeViewActive: false, focusedTerminal: null,
+  focusedTerminal: null,
   isResizing: false, resizeTarget: null,
   resizeStartW: 0, resizeStartH: 0, resizeStartX: 0, resizeStartY: 0,
   zCounter: 10,
@@ -374,87 +332,6 @@ const minimapCanvas = $('minimap-canvas');
 const minimapCtx = minimapCanvas.getContext('2d');
 const zoomIndicator = $('zoom-indicator');
 const connectionSvg = $('connection-svg');
-
-// ==================== ANSI PARSER ====================
-const ANSI_COLORS = ['black','red','green','yellow','blue','magenta','cyan','white'];
-
-function parseAnsi(text) {
-  // Returns array of {text, classes} segments
-  const segments = [];
-  let current = { fg: null, bg: null, bold: false, dim: false, italic: false, underline: false };
-  let i = 0;
-  let buf = '';
-
-  function flushBuf() {
-    if (buf.length > 0) {
-      const cls = [];
-      if (current.bold) cls.push('ansi-bold');
-      if (current.dim) cls.push('ansi-dim');
-      if (current.italic) cls.push('ansi-italic');
-      if (current.underline) cls.push('ansi-underline');
-      if (current.fg !== null) cls.push(current.fg);
-      if (current.bg !== null) cls.push(current.bg);
-      segments.push({ text: buf, classes: cls.join(' ') });
-      buf = '';
-    }
-  }
-
-  while (i < text.length) {
-    if (text[i] === '\\x1b' || text[i] === '\\u001b' || text.charCodeAt(i) === 27) {
-      flushBuf();
-      if (text[i+1] === '[') {
-        let j = i + 2;
-        while (j < text.length && text[j] !== 'm' && text[j] !== 'A' && text[j] !== 'B' &&
-               text[j] !== 'C' && text[j] !== 'D' && text[j] !== 'H' && text[j] !== 'J' &&
-               text[j] !== 'K' && text[j] !== 'h' && text[j] !== 'l' && j - i < 20) j++;
-        if (text[j] === 'm') {
-          const codes = text.substring(i+2, j).split(';').map(Number);
-          for (let ci = 0; ci < codes.length; ci++) {
-            const c = codes[ci];
-            if (c === 0) { current = { fg:null,bg:null,bold:false,dim:false,italic:false,underline:false }; }
-            else if (c === 1) current.bold = true;
-            else if (c === 2) current.dim = true;
-            else if (c === 3) current.italic = true;
-            else if (c === 4) current.underline = true;
-            else if (c >= 30 && c <= 37) current.fg = 'ansi-fg-' + ANSI_COLORS[c-30];
-            else if (c >= 40 && c <= 47) current.bg = 'ansi-bg-' + ANSI_COLORS[c-40];
-            else if (c >= 90 && c <= 97) current.fg = 'ansi-fg-bright-' + ANSI_COLORS[c-90];
-            else if (c >= 100 && c <= 107) current.bg = 'ansi-bg-bright-' + ANSI_COLORS[c-100];
-            else if (c === 39) current.fg = null;
-            else if (c === 49) current.bg = null;
-          }
-          i = j + 1;
-          continue;
-        }
-        // Other escape sequences - skip
-        i = j + 1;
-        continue;
-      }
-      i++;
-      continue;
-    }
-    // Filter carriage return for line handling
-    if (text[i] === '\\r') { i++; continue; }
-    buf += text[i];
-    i++;
-  }
-  flushBuf();
-  return segments;
-}
-
-function renderAnsiToHtml(text) {
-  const segs = parseAnsi(text);
-  let html = '';
-  for (const s of segs) {
-    const escaped = s.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    if (s.classes) {
-      html += '<span class="' + s.classes + '">' + escaped + '</span>';
-    } else {
-      html += escaped;
-    }
-  }
-  return html;
-}
 
 // ==================== CANVAS TRANSFORM ====================
 function updateTransform() {
@@ -527,10 +404,10 @@ function updateMinimap() {
 function createTerminalCard(id, name, cwd, hasPty, parentId) {
   const w=600, h=400;
   const x=S.nextTermX, y=S.nextTermY;
-  S.nextTermX += 40; S.nextTermY += 40;
-  if (S.nextTermY > 500) { S.nextTermY = 50; S.nextTermX += 300; }
+  S.nextTermX += w + 30;
+  if (S.nextTermX > 2000) { S.nextTermX = 50; S.nextTermY += h + 30; }
 
-  const t = { id, name, cwd, x, y, w, h, status:'active', outputBuf:'', hasPty, parentId: parentId||null };
+  const t = { id, name, cwd, x, y, w, h, status:'active', hasPty, parentId: parentId||null, xterm: null, fitAddon: null };
   S.terminals.set(id, t);
 
   const card = document.createElement('div');
@@ -547,7 +424,7 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
       '<span class="terminal-cwd">'+esc(cwd||'')+'</span>' +
       '<button class="terminal-close" data-id="'+id+'">✕</button>' +
     '</div>' +
-    '<div class="terminal-body" tabindex="0" data-id="'+id+'"></div>' +
+    '<div class="terminal-body" data-id="'+id+'"></div>' +
     '<div class="terminal-resize" data-id="'+id+'"></div>';
 
   canvasEl.appendChild(card);
@@ -563,33 +440,45 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
   closeBtn.addEventListener('click', () => closeTerminal(id));
   card.addEventListener('mousedown', () => focusTerminal(id));
 
-  // Keyboard input for real PTY
-  body.addEventListener('keydown', e => {
-    e.preventDefault(); e.stopPropagation();
-    let data = '';
-    if (e.key === 'Enter') data = '\\r';
-    else if (e.key === 'Backspace') data = '\\x7f';
-    else if (e.key === 'Tab') data = '\\t';
-    else if (e.key === 'Escape') data = '\\x1b';
-    else if (e.key === 'ArrowUp') data = '\\x1b[A';
-    else if (e.key === 'ArrowDown') data = '\\x1b[B';
-    else if (e.key === 'ArrowRight') data = '\\x1b[C';
-    else if (e.key === 'ArrowLeft') data = '\\x1b[D';
-    else if (e.key === 'Home') data = '\\x1b[H';
-    else if (e.key === 'End') data = '\\x1b[F';
-    else if (e.key === 'Delete') data = '\\x1b[3~';
-    else if (e.ctrlKey && e.key === 'c') data = '\\x03';
-    else if (e.ctrlKey && e.key === 'd') data = '\\x04';
-    else if (e.ctrlKey && e.key === 'z') data = '\\x1a';
-    else if (e.ctrlKey && e.key === 'l') data = '\\x0c';
-    else if (e.ctrlKey && e.key === 'a') data = '\\x01';
-    else if (e.ctrlKey && e.key === 'e') data = '\\x05';
-    else if (e.ctrlKey && e.key === 'u') data = '\\x15';
-    else if (e.ctrlKey && e.key === 'k') data = '\\x0b';
-    else if (e.ctrlKey && e.key === 'w') data = '\\x17';
-    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) data = e.key;
-    if (data) vscode.postMessage({ type:'terminalInput', id, data });
+  // xterm.js terminal instance
+  const term = new Terminal({
+    cursorBlink: true,
+    fontSize: 13,
+    fontFamily: "'Cascadia Code','Fira Code','Consolas','Courier New',monospace",
+    theme: {
+      background: '#0e0e0e',
+      foreground: '#d4d4d4',
+      cursor: '#d4d4d4',
+      selectionBackground: '#264f78',
+    },
+    allowTransparency: true,
+    scrollback: 5000,
   });
+  const fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  t.xterm = term;
+  t.fitAddon = fitAddon;
+
+  // Delay xterm.open() until body has real dimensions to prevent measurement chars leaking
+  const initXterm = () => {
+    if (body.clientWidth > 0 && body.clientHeight > 0) {
+      term.open(body);
+      try { fitAddon.fit(); } catch {}
+      vscode.postMessage({ type:'terminalResize', id, cols:term.cols, rows:term.rows });
+
+      term.onData(data => {
+        vscode.postMessage({ type:'terminalInput', id, data });
+      });
+
+      const doFit = () => {
+        try { fitAddon.fit(); vscode.postMessage({ type:'terminalResize', id, cols:term.cols, rows:term.rows }); } catch {}
+      };
+      new ResizeObserver(() => doFit()).observe(body);
+    } else {
+      requestAnimationFrame(initXterm);
+    }
+  };
+  requestAnimationFrame(initXterm);
 
   // Double-click title to rename
   titleEl.addEventListener('dblclick', e => {
@@ -615,7 +504,6 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
       input.replaceWith(newTitle);
       vscode.postMessage({ type:'renameTerminal', id, name:newName });
       // Update office worker name
-      if (OFFICE.workers.has(id)) OFFICE.workers.get(id).name = newName;
     };
     input.addEventListener('blur', finish);
     input.addEventListener('keydown', e2 => { if(e2.key==='Enter') input.blur(); if(e2.key==='Escape'){input.value=t.name;input.blur();} });
@@ -624,12 +512,17 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
   // Resize
   resizeHandle.addEventListener('mousedown', e => startResize(e,id));
 
+  // Auto-center on new terminal
+  const vw = canvasContainer.clientWidth, vh = canvasContainer.clientHeight;
+  S.canvasX = vw/2 - (x + w/2) * S.zoom;
+  S.canvasY = vh/2 - (y + h/2) * S.zoom;
+  updateTransform();
+
   focusTerminal(id);
   updateMinimap();
   updateConnectionLines();
 
   // Auto-create office worker
-  if (!OFFICE.workers.has(id)) officeAddWorker(id, name);
 
   return card;
 }
@@ -637,16 +530,18 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
 function appendTerminalOutput(id, data) {
   const t = S.terminals.get(id);
   if (!t) return;
-  t.outputBuf += data;
-  // Keep buffer bounded
-  if (t.outputBuf.length > 200000) t.outputBuf = t.outputBuf.slice(-150000);
-
-  const card = document.getElementById('term-'+id);
-  if (!card) return;
-  const body = card.querySelector('.terminal-body');
-  // Re-render (for simplicity; a real impl would do incremental)
-  body.innerHTML = renderAnsiToHtml(t.outputBuf) + '<span class="cursor-block"></span>';
-  body.scrollTop = body.scrollHeight;
+  if (!t.xterm || !t.xterm.element) {
+    // Buffer data until xterm is ready
+    t.pendingData = (t.pendingData || '') + data;
+    const check = () => {
+      if (t.xterm && t.xterm.element) {
+        if (t.pendingData) { t.xterm.write(t.pendingData); t.pendingData = ''; }
+      } else { requestAnimationFrame(check); }
+    };
+    requestAnimationFrame(check);
+    return;
+  }
+  t.xterm.write(data);
 }
 
 function focusTerminal(id) {
@@ -656,11 +551,14 @@ function focusTerminal(id) {
     card.classList.add('focused');
     card.style.zIndex = ++S.zCounter;
     S.focusedTerminal = id;
-    card.querySelector('.terminal-body')?.focus();
+    const t = S.terminals.get(id);
+    if (t && t.xterm) t.xterm.focus();
   }
 }
 
 function closeTerminal(id) {
+  const t = S.terminals.get(id);
+  if (t && t.xterm) t.xterm.dispose();
   const card = document.getElementById('term-'+id);
   if (card) card.remove();
   S.terminals.delete(id);
@@ -767,16 +665,23 @@ window.addEventListener('mouseup', () => {
   }
 });
 
-// Zoom
+// Zoom (mouse wheel) + trackpad gestures (pan & pinch)
 canvasContainer.addEventListener('wheel', e => {
-  e.preventDefault();
-  const delta = e.deltaY > 0 ? 0.9 : 1.1;
-  const nz = Math.max(0.1, Math.min(3, S.zoom * delta));
-  S.canvasX = e.clientX - (e.clientX - S.canvasX) * (nz / S.zoom);
-  S.canvasY = e.clientY - (e.clientY - S.canvasY) * (nz / S.zoom);
-  S.zoom = nz;
+  e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+  if (e.ctrlKey || e.metaKey) {
+    // Pinch-to-zoom on trackpad / Ctrl+scroll / Cmd+scroll
+    const factor = e.ctrlKey ? 0.01 : 0.002;
+    const nz = Math.max(0.1, Math.min(3, S.zoom * (1 - e.deltaY * factor)));
+    S.canvasX = e.clientX - (e.clientX - S.canvasX) * (nz / S.zoom);
+    S.canvasY = e.clientY - (e.clientY - S.canvasY) * (nz / S.zoom);
+    S.zoom = nz;
+  } else if (Math.abs(e.deltaX) > 0 || Math.abs(e.deltaY) > 0) {
+    // Two-finger pan on trackpad / regular scroll
+    S.canvasX -= e.deltaX;
+    S.canvasY -= e.deltaY;
+  }
   updateTransform(); updateMinimap();
-}, { passive: false });
+}, { passive: false, capture: true });
 
 // ==================== TOOLBAR ====================
 $('btn-new-terminal').addEventListener('click', () => {
@@ -795,7 +700,8 @@ $('btn-fit-all').addEventListener('click', fitAll);
 $('btn-reset-zoom').addEventListener('click', () => {
   S.zoom=1; S.canvasX=0; S.canvasY=0; updateTransform();
 });
-$('btn-office-view').addEventListener('click', toggleOfficeView);
+// Office view disabled for now
+// $('btn-office-view')?.addEventListener('click', () => { vscode.postMessage({ type:'openPixelAgents' }); });
 $('btn-preset-mgr').addEventListener('click', openPresetManager);
 
 function fitAll() {
@@ -938,12 +844,10 @@ function renderPresets(presets) {
   }
   const addBtn = document.createElement('button');
   addBtn.className = 'preset-btn';
-  addBtn.innerHTML = '<span class="preset-icon">➕</span>Custom';
+  addBtn.innerHTML = '<span class="preset-icon">➕</span>';
+  addBtn.title = 'New terminal';
   addBtn.addEventListener('click', () => {
-    const name = prompt('Terminal name:');
-    if (!name) return;
-    const cmd = prompt('Command (empty = default shell):') || '';
-    vscode.postMessage({ type:'createTerminal', name, command:cmd });
+    vscode.postMessage({ type:'createTerminal', name:'Terminal', command:'' });
   });
   dock.appendChild(addBtn);
 }
@@ -1009,265 +913,14 @@ function restoreLayout(layout) {
   }
 }
 
-// ==================== PIXEL OFFICE VIEW ====================
-const officeView = $('office-view');
-const officeCanvas = $('office-canvas');
-const officeCtx = officeCanvas.getContext('2d');
-let officeAnimId = null;
+// ==================== PIXEL OFFICE (external via pixel-agents) ====================
 
-const OFFICE = { floorY:0, deskSpacing:130, workers:new Map() };
-const PX = {
-  skin:'#ffcc99',
-  hair:['#3d2314','#8b4513','#d2691e','#ffd700','#1a1a2e','#c0c0c0','#e04040','#40e040'],
-  shirt:['#007acc','#4ec9b0','#d16969','#dcdcaa','#c586c0','#569cd6','#e06c60','#60c0e0'],
-  pants:'#2d2d5e', desk:'#8b6914', monitor:'#1e1e1e',
-  screenOff:'#0e0e0e', screenOn:'#0d3320',
-  floor:'#3d3552', wall:'#2a2040', chair:'#444',
-};
+// Stubs - office view is handled by pixel-agents extension
+function officeAddWorker() {}
+function officeRemoveWorker() {}
+function officeSetStatus() {}
 
-class PixelWorker {
-  constructor(id, name, deskX, floorY) {
-    this.id = id; this.name = name;
-    this.deskX = deskX; this.x = deskX; this.y = floorY; this.floorY = floorY;
-    this.state = 'working'; this.frame = 0; this.dir = 1;
-    this.walkTarget = null; this.message = ''; this.msgTimer = 0;
-    this.hair = PX.hair[Math.floor(Math.random()*PX.hair.length)];
-    this.shirt = PX.shirt[Math.floor(Math.random()*PX.shirt.length)];
-    this.idleTimer = 0; this.actionTimer = Math.random()*300+100;
-    this.showMsg('Starting up...', 120);
-  }
-
-  showMsg(m, d) { this.message = m; this.msgTimer = d||120; }
-
-  update() {
-    this.frame++;
-    this.actionTimer--;
-    if (this.msgTimer > 0) this.msgTimer--;
-
-    if (this.state === 'working') {
-      if (this.actionTimer <= 0) {
-        if (Math.random() < 0.25) {
-          this.state = 'walking';
-          this.walkTarget = this.deskX + (Math.random()-0.5)*250;
-          const msgs = ['Taking a break~','☕ Coffee time','Stretching...','💭 Thinking...'];
-          this.showMsg(msgs[Math.floor(Math.random()*msgs.length)], 90);
-        } else {
-          const msgs = ['Working...','Coding...','Compiling...','Debugging...','Testing...','📝 Writing'];
-          this.showMsg(msgs[Math.floor(Math.random()*msgs.length)], 80);
-        }
-        this.actionTimer = Math.random()*400+200;
-      }
-    } else if (this.state === 'walking') {
-      const speed = 0.8;
-      if (Math.abs(this.x - this.walkTarget) < 2) {
-        this.state = 'idle'; this.idleTimer = Math.random()*150+50;
-        this.showMsg('☕', 60);
-      } else {
-        this.dir = this.walkTarget > this.x ? 1 : -1;
-        this.x += this.dir * speed;
-      }
-    } else if (this.state === 'idle') {
-      this.idleTimer--;
-      if (this.idleTimer <= 0) {
-        this.state = 'walking'; this.walkTarget = this.deskX;
-        this.showMsg('Back to work!', 90);
-      }
-    } else if (this.state === 'done') {
-      if (this.actionTimer <= 0) { this.state = 'working'; this.actionTimer = Math.random()*300+100; }
-    }
-    if (this.state === 'walking' && this.walkTarget === this.deskX && Math.abs(this.x-this.deskX)<2) {
-      this.x = this.deskX; this.state = 'working'; this.showMsg('Working...', 90);
-    }
-  }
-
-  draw(ctx, s) {
-    const px = this.x*s, py = this.y*s;
-    const atDesk = this.state==='working' || (this.state==='done' && Math.abs(this.x-this.deskX)<5);
-    const deskPx = this.deskX*s;
-
-    // Desk
-    ctx.fillStyle = PX.desk;
-    ctx.fillRect(deskPx-20*s, py-24*s, 40*s, 3*s);
-    ctx.fillRect(deskPx-18*s, py-24*s, 3*s, 24*s);
-    ctx.fillRect(deskPx+15*s, py-24*s, 3*s, 24*s);
-
-    // Monitor
-    ctx.fillStyle = PX.monitor;
-    ctx.fillRect(deskPx-10*s, py-40*s, 20*s, 14*s);
-    const on = this.state==='working'||this.state==='done';
-    ctx.fillStyle = on ? PX.screenOn : PX.screenOff;
-    ctx.fillRect(deskPx-8*s, py-38*s, 16*s, 10*s);
-    if (on && this.frame%10<7) {
-      ctx.fillStyle = '#4ec9b0';
-      for (let i=0;i<3;i++) ctx.fillRect(deskPx-6*s, (py-36*s)+i*3*s, (4+Math.floor(Math.random()*8))*s, 1*s);
-    }
-    ctx.fillStyle = PX.monitor;
-    ctx.fillRect(deskPx-2*s, py-26*s, 4*s, 3*s);
-
-    // Chair
-    if (atDesk) {
-      ctx.fillStyle = PX.chair;
-      ctx.fillRect(deskPx-8*s, py-16*s, 16*s, 2*s);
-      ctx.fillRect(deskPx-8*s, py-26*s, 2*s, 10*s);
-      ctx.fillRect(deskPx-6*s, py-2*s, 3*s, 2*s);
-      ctx.fillRect(deskPx+3*s, py-2*s, 3*s, 2*s);
-    }
-
-    // Character
-    const cx = px, cy = py;
-    // Legs
-    ctx.fillStyle = PX.pants;
-    if (this.state === 'walking') {
-      const lf = Math.floor(this.frame/8)%4;
-      const lo = [[-2,0,2,0],[-3,0,1,-1],[-2,0,2,0],[-1,-1,3,0]][lf];
-      ctx.fillRect(cx+lo[0]*s, cy-10*s+lo[1]*s, 3*s, 10*s);
-      ctx.fillRect(cx+lo[2]*s, cy-10*s+lo[3]*s, 3*s, 10*s);
-    } else {
-      ctx.fillRect(cx-2*s, cy-10*s, 3*s, 10*s);
-      ctx.fillRect(cx+2*s, cy-10*s, 3*s, 10*s);
-    }
-    // Body
-    ctx.fillStyle = this.shirt;
-    ctx.fillRect(cx-4*s, cy-20*s, 10*s, 11*s);
-    // Arms
-    if (atDesk && this.state==='working') {
-      ctx.fillRect(cx-6*s, cy-18*s, 3*s, 8*s);
-      ctx.fillRect(cx+5*s, cy-18*s, 3*s, 8*s);
-      ctx.fillStyle = PX.skin;
-      ctx.fillRect(cx-6*s, cy-11*s, 3*s, 2*s);
-      ctx.fillRect(cx+5*s, cy-11*s, 3*s, 2*s);
-    } else {
-      ctx.fillRect(cx-6*s, cy-19*s, 3*s, 10*s);
-      ctx.fillRect(cx+5*s, cy-19*s, 3*s, 10*s);
-      ctx.fillStyle = PX.skin;
-      ctx.fillRect(cx-6*s, cy-10*s, 3*s, 2*s);
-      ctx.fillRect(cx+5*s, cy-10*s, 3*s, 2*s);
-    }
-    // Head
-    ctx.fillStyle = PX.skin;
-    ctx.fillRect(cx-3*s, cy-28*s, 8*s, 8*s);
-    // Hair
-    ctx.fillStyle = this.hair;
-    ctx.fillRect(cx-3*s, cy-30*s, 8*s, 3*s);
-    if (this.dir===-1) ctx.fillRect(cx+4*s, cy-28*s, 1*s, 4*s);
-    else ctx.fillRect(cx-3*s, cy-28*s, 1*s, 4*s);
-    // Eyes
-    ctx.fillStyle = '#333';
-    if (this.frame%120 > 3) {
-      ctx.fillRect(cx-1*s, cy-25*s, 2*s, 2*s);
-      ctx.fillRect(cx+3*s, cy-25*s, 2*s, 2*s);
-    }
-
-    // Message bubble
-    if (this.message && this.msgTimer > 0) {
-      const mw = this.message.length * 5*s + 8*s;
-      const mx = cx - mw/2 + 2*s, my = cy - 42*s;
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(mx, my, mw, 10*s, 3*s);
-      else { ctx.moveTo(mx+3*s,my); ctx.lineTo(mx+mw-3*s,my); ctx.lineTo(mx+mw,my+10*s); ctx.lineTo(mx,my+10*s); ctx.closePath(); }
-      ctx.fill();
-      ctx.fillRect(cx, my+9*s, 4*s, 3*s);
-      ctx.fillStyle = '#333';
-      ctx.font = Math.max(8,7*s)+'px monospace';
-      ctx.fillText(this.message, mx+4*s, my+8*s);
-    }
-
-    // Name
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = Math.max(8,6*s)+'px monospace';
-    const nw = ctx.measureText(this.name).width;
-    ctx.fillText(this.name, cx-nw/2+2*s, cy+8*s);
-  }
-}
-
-function officeAddWorker(id, name) {
-  const cnt = OFFICE.workers.size;
-  const deskX = 80 + cnt * OFFICE.deskSpacing;
-  OFFICE.workers.set(id, new PixelWorker(id, name, deskX, OFFICE.floorY));
-}
-function officeRemoveWorker(id) { OFFICE.workers.delete(id); }
-
-function officeSetStatus(id, status, msg) {
-  const w = OFFICE.workers.get(id);
-  if (!w) return;
-  if (status === 'active') {
-    if (w.state !== 'working' && w.state !== 'walking') {
-      w.state = 'working'; w.showMsg(msg||'Working...', 120);
-    }
-  } else if (status === 'idle') {
-    if (w.state === 'working') {
-      w.showMsg(msg||'Waiting...', 120);
-    }
-  } else if (status === 'done') {
-    w.state = 'done'; w.showMsg(msg||'Done! ✓', 180); w.actionTimer = 200;
-  } else if (status === 'dead') {
-    w.state = 'idle'; w.idleTimer = 9999; w.showMsg('💀 Exited', 200);
-  }
-}
-
-function toggleOfficeView() {
-  S.officeViewActive = !S.officeViewActive;
-  if (S.officeViewActive) {
-    officeView.classList.add('visible');
-    for (const [id,t] of S.terminals) {
-      if (!OFFICE.workers.has(id)) officeAddWorker(id, t.name);
-    }
-    startOfficeAnim();
-  } else {
-    officeView.classList.remove('visible');
-    if (officeAnimId) { cancelAnimationFrame(officeAnimId); officeAnimId = null; }
-  }
-}
-
-function startOfficeAnim() {
-  const W = officeCanvas.width = officeCanvas.clientWidth;
-  const H = officeCanvas.height = officeCanvas.clientHeight;
-  OFFICE.floorY = H * 0.75;
-  for (const w of OFFICE.workers.values()) { w.floorY = OFFICE.floorY; w.y = OFFICE.floorY; }
-
-  function render() {
-    officeCtx.clearRect(0,0,W,H);
-    const sc = Math.min(W/800, H/400)*1.5;
-
-    // Wall
-    officeCtx.fillStyle = PX.wall;
-    officeCtx.fillRect(0,0,W,OFFICE.floorY);
-
-    // Windows
-    const wW=60*sc, wH=40*sc;
-    for (let i=0;i<3;i++) {
-      const wx=W*0.2+i*W*0.3, wy=OFFICE.floorY*0.3;
-      officeCtx.fillStyle='#1a1a3e'; officeCtx.fillRect(wx-wW/2,wy-wH/2,wW,wH);
-      officeCtx.fillStyle='#2a2a5e'; officeCtx.fillRect(wx-wW/2+2,wy-wH/2+2,wW-4,wH-4);
-      officeCtx.fillStyle='#555';
-      officeCtx.fillRect(wx-1,wy-wH/2,2,wH);
-      officeCtx.fillRect(wx-wW/2,wy-1,wW,2);
-    }
-
-    // Floor
-    officeCtx.fillStyle = PX.floor;
-    officeCtx.fillRect(0,OFFICE.floorY,W,H-OFFICE.floorY);
-    officeCtx.fillStyle = 'rgba(255,255,255,0.02)';
-    for (let x=0;x<W;x+=20*sc) officeCtx.fillRect(x,OFFICE.floorY,10*sc,H-OFFICE.floorY);
-
-    for (const w of OFFICE.workers.values()) { w.update(); w.draw(officeCtx, sc); }
-
-    officeCtx.fillStyle='rgba(255,255,255,0.3)'; officeCtx.font=12*sc+'px monospace';
-    officeCtx.fillText('🏢 Infinite Terminal Office', 10, 20*sc);
-    officeCtx.font=8*sc+'px monospace';
-    officeCtx.fillText(OFFICE.workers.size+' workers', 10, 34*sc);
-
-    if (S.officeViewActive) officeAnimId = requestAnimationFrame(render);
-  }
-  render();
-}
-
-$('btn-close-office').addEventListener('click', toggleOfficeView);
-$('btn-new-terminal-office').addEventListener('click', () => {
-  vscode.postMessage({ type:'createTerminal', name:'Terminal', command:'' });
-});
-
+// END PIXEL OFFICE STUBS
 // ==================== MESSAGE HANDLING ====================
 window.addEventListener('message', e => {
   const m = e.data;
@@ -1301,9 +954,6 @@ window.addEventListener('message', e => {
     case 'worktrees':
       renderWorktrees(m.worktrees);
       break;
-    case 'toggleOfficeView':
-      toggleOfficeView();
-      break;
     case 'openSearch':
       openSearch();
       break;
@@ -1321,9 +971,9 @@ function escHtml(t) { const d=document.createElement('div'); d.textContent=t; re
 
 // ==================== KEYBOARD SHORTCUTS ====================
 document.addEventListener('keydown', e => {
-  // Don't capture if typing in terminal or input
-  const tag = document.activeElement?.tagName;
-  const inTerminal = document.activeElement?.classList?.contains('terminal-body');
+  // Don't capture if typing in terminal (xterm.js textarea) or input
+  const active = document.activeElement;
+  const inTerminal = active?.closest('.terminal-body') || (active?.tagName === 'TEXTAREA' && active?.closest('.xterm'));
 
   if (!inTerminal) {
     if ((e.ctrlKey||e.metaKey) && e.key === 'p') {
@@ -1335,7 +985,6 @@ document.addEventListener('keydown', e => {
     }
   }
   if (e.key === 'Escape') {
-    if (S.officeViewActive) toggleOfficeView();
     document.querySelectorAll('.modal.visible').forEach(m => m.classList.remove('visible'));
   }
 });

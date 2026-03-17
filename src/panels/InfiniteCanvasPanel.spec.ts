@@ -37,7 +37,9 @@ vi.mock('vscode', () => {
     dispose: vi.fn(),
     webview: {
       html: '',
+      cspSource: 'https://test.vscode-cdn.net',
       postMessage: postMessageMock,
+      asWebviewUri: vi.fn((uri: unknown) => uri),
       onDidReceiveMessage: vi.fn(
         (handler: (message: Record<string, unknown>) => Promise<void> | void) => {
           setReceiveMessageHandler(handler);
@@ -78,6 +80,10 @@ vi.mock('../pty/PtyManager', () => ({
   PtyManager: vi.fn(() => ptyFactoryMock()),
 }));
 
+vi.mock('fs', () => ({
+  readFileSync: vi.fn(() => '/* xterm css */'),
+}));
+
 vi.mock('./webviewHtml', () => ({
   getWebviewHtml: vi.fn(() => '<html></html>'),
 }));
@@ -98,7 +104,7 @@ describe('InfiniteCanvasPanel', () => {
       onActivity: vi.fn(),
       onData: vi.fn(),
       onExit: vi.fn(),
-      spawn: vi.fn(() => true),
+      spawn: vi.fn(async () => true),
       resize: vi.fn(),
       getProcess: vi.fn(),
       write: vi.fn(),
@@ -138,7 +144,7 @@ describe('InfiniteCanvasPanel', () => {
       onActivity: vi.fn(),
       onData: vi.fn(),
       onExit: vi.fn(),
-      spawn: vi.fn(() => false),
+      spawn: vi.fn(async () => false),
       resize: vi.fn(),
       getProcess: vi.fn(),
       write: vi.fn(),
@@ -160,7 +166,7 @@ describe('InfiniteCanvasPanel', () => {
       type: 'terminalCreated',
       name: 'Fallback',
       cwd: '/workspace',
-      hasPty: false,
+      hasPty: true,
     });
     expect(findPostedMessage('terminalOutput')).toMatchObject({
       type: 'terminalOutput',
@@ -193,7 +199,7 @@ describe('InfiniteCanvasPanel', () => {
       onActivity: vi.fn(),
       onData: vi.fn(),
       onExit: vi.fn(),
-      spawn: vi.fn(() => false),
+      spawn: vi.fn(async () => false),
       resize: vi.fn(),
       getProcess: vi.fn(),
       write: vi.fn(),
