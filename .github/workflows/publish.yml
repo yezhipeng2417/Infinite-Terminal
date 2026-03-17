@@ -66,6 +66,8 @@ jobs:
         continue-on-error: true
 
       - name: Commit version bump
+        env:
+          HUSKY: "0"
         run: |
           git add package.json package-lock.json
           git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
