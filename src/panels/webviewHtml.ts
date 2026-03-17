@@ -371,8 +371,8 @@ function updateTerminalPositions() {
     if (card) {
       card.style.left = (t.x * S.zoom + S.canvasX) + 'px';
       card.style.top = (t.y * S.zoom + S.canvasY) + 'px';
-      card.style.width = (t.w * S.zoom) + 'px';
-      card.style.height = (t.h * S.zoom) + 'px';
+      card.style.width = t.w + 'px';
+      card.style.height = t.h + 'px';
     }
   }
 }
@@ -448,7 +448,7 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
   const card = document.createElement('div');
   card.className = 'terminal-card';
   card.id = 'term-' + id;
-  card.style.cssText = 'left:'+(x*S.zoom+S.canvasX)+'px;top:'+(y*S.zoom+S.canvasY)+'px;width:'+(w*S.zoom)+'px;height:'+(h*S.zoom)+'px';
+  card.style.cssText = 'left:'+(x*S.zoom+S.canvasX)+'px;top:'+(y*S.zoom+S.canvasY)+'px;width:'+w+'px;height:'+h+'px';
 
   const esc = s => { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; };
 
@@ -685,12 +685,12 @@ window.addEventListener('mousemove', e => {
   if (S.isResizing && S.resizeTarget) {
     const t = S.terminals.get(S.resizeTarget);
     if (!t) return;
-    t.w = Math.max(350, S.resizeStartW + (e.clientX-S.resizeStartX)/S.zoom);
-    t.h = Math.max(220, S.resizeStartH + (e.clientY-S.resizeStartY)/S.zoom);
+    t.w = Math.max(350, S.resizeStartW + (e.clientX-S.resizeStartX));
+    t.h = Math.max(220, S.resizeStartH + (e.clientY-S.resizeStartY));
     const card = document.getElementById('term-'+S.resizeTarget);
     if (card) {
-      card.style.width = (t.w * S.zoom) + 'px';
-      card.style.height = (t.h * S.zoom) + 'px';
+      card.style.width = t.w + 'px';
+      card.style.height = t.h + 'px';
     }
   }
 });
