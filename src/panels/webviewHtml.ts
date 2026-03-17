@@ -542,12 +542,22 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
   const titleEl = card.querySelector('.terminal-title');
   const resizeHandle = card.querySelector('.terminal-resize');
 
-  // Drag header
-  header.addEventListener('mousedown', e => { if(e.target===closeBtn) return; startDragTerminal(e,id); });
+  // Drag header (Shift+Click = select instead of drag)
+  header.addEventListener('mousedown', e => {
+    if (e.target === closeBtn) return;
+    if (e.shiftKey) {
+      e.stopPropagation();
+      e.preventDefault();
+      toggleSelectTerminal(id);
+      return;
+    }
+    startDragTerminal(e, id);
+  });
   closeBtn.addEventListener('click', () => closeTerminal(id));
   card.addEventListener('mousedown', (e) => {
     if (e.shiftKey) {
       e.stopPropagation();
+      e.preventDefault();
       toggleSelectTerminal(id);
     } else {
       focusTerminal(id);
