@@ -65,6 +65,16 @@ jobs:
         run: npx @vscode/vsce publish --target darwin-x64 --pat "${{ secrets.VSCE_PAT }}" --allow-missing-repository
         continue-on-error: true
 
+      # Build and publish win32-x64
+      - name: Publish win32-x64
+        run: npx @vscode/vsce publish --target win32-x64 --pat "${{ secrets.VSCE_PAT }}" --allow-missing-repository
+        continue-on-error: true
+
+      # Build and publish win32-arm64
+      - name: Publish win32-arm64
+        run: npx @vscode/vsce publish --target win32-arm64 --pat "${{ secrets.VSCE_PAT }}" --allow-missing-repository
+        continue-on-error: true
+
       - name: Commit version bump
         env:
           HUSKY: "0"
