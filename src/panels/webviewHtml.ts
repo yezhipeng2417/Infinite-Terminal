@@ -667,6 +667,8 @@ window.addEventListener('mouseup', () => {
 
 // Zoom (mouse wheel) + trackpad gestures (pan & pinch)
 canvasContainer.addEventListener('wheel', e => {
+  // Let xterm.js handle scroll when cursor is over a terminal
+  if (e.target.closest && e.target.closest('.terminal-body')) return;
   e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
   if (e.ctrlKey || e.metaKey) {
     // Pinch-to-zoom on trackpad / Ctrl+scroll / Cmd+scroll
