@@ -6,11 +6,13 @@ on:
     branches: [main]
 
 jobs:
-  publish:
+  bump:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,6 +38,36 @@ jobs:
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Bumped $CURRENT -> $NEW_VERSION"
 
+      - name: Commit version bump
+        env:
+          HUSKY: "0"
+        run: |
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git tag -f "v${{ steps.bump.outputs.version }}"
+          git push origin main --follow-tags --force
+
+  publish:
+    needs: bump
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            targets: "darwin-arm64 darwin-x64"
+          - os: ubuntu-latest
+            targets: "linux-x64 linux-arm64"
+          - os: windows-latest
+            targets: "win32-x64 win32-arm64"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Install dependencies
         run: npm ci
 
@@ -45,41 +77,12 @@ jobs:
       - name: Compile
         run: npm run compile
 
-      # Build and publish darwin-arm64
-      - name: Publish darwin-arm64
-        run: npx @vscode/vsce publish --target darwin-arm64 --pat "${{ secrets.VSCE_PAT }}" --allow-missing-repository
-        continue-on-error: true
-
-      # Build and publish linux-x64
-      - name: Publish linux-x64
-        run: npx @vscode/vsce publish --target linux-x64 --pat "${{ secrets.VSCE_PAT }}" --allow-missing-repository
-        continue-on-error: true
-
-      # Build and publish linux-arm64
-      - name: Publish linux-arm64
-        run: npx @vscode/vsce publish --target linux-arm64 --pat "${{ secrets.VSCE_PAT }}" --allow-missing-repository
-        continue-on-error: true
-
-      # Build and publish darwin-x64
-      - name: Publish darwin-x64
-        run: npx @vscode/vsce publish --target darwin-x64 --pat "${{ secrets.VSCE_PAT }}" --allow-missing-repository
-        continue-on-error: true
-
-      # Build and publish win32-x64
-      - name: Publish win32-x64
-        run: npx @vscode/vsce publish --target win32-x64 --pat "${{ secrets.VSCE_PAT }}" --allow-missing-repository
-        continue-on-error: true
-
-      # Build and publish win32-arm64
-      - name: Publish win32-arm64
-        run: npx @vscode/vsce publish --target win32-arm64 --pat "${{ secrets.VSCE_PAT }}" --allow-missing-repository
-        continue-on-error: true
-
-      - name: Commit version bump
-        env:
-          HUSKY: "0"
+      - name: Publish targets
+        shell: bash
         run: |
-          git add package.json package-lock.json
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
-          git tag -f "v${{ steps.bump.outputs.version }}"
-          git push origin main --follow-tags --force
+          for target in ${{ matrix.targets }}; do
+            echo "Publishing $target v${{ needs.bump.outputs.version }}..."
+            npx @vscode/vsce publish --target $target \
+              --pat "${{ secrets.VSCE_PAT }}" \
+              --allow-missing-repository || true
+          done
