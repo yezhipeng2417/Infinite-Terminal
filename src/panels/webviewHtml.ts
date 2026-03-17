@@ -360,11 +360,6 @@ function updateTransform() {
   zoomIndicator.textContent = Math.round(S.zoom*100) + '%';
   $('btn-reset-zoom').textContent = '🔍 ' + Math.round(S.zoom*100) + '%';
   drawGrid();
-  // Counter-zoom terminal bodies so xterm.js coordinates stay accurate
-  const counterZoom = 1 / S.zoom;
-  document.querySelectorAll('.terminal-body').forEach(body => {
-    body.style.zoom = counterZoom;
-  });
   updateConnectionLines();
 }
 
@@ -851,6 +846,7 @@ function renderPresetList() {
 // ==================== PRESET DOCK ====================
 function renderPresets(presets) {
   S.presets = presets;
+  if (!S.presetCounters) S.presetCounters = {};
   const dock = $('preset-dock');
   dock.innerHTML = '';
   const icons = { terminal:'⬛', code:'📝', edit:'✏️', server:'🖥️', database:'🗄️' };
@@ -859,7 +855,9 @@ function renderPresets(presets) {
     btn.className = 'preset-btn';
     btn.innerHTML = '<span class="preset-icon">'+(icons[p.icon]||'⬛')+'</span>' + escHtml(p.name);
     btn.addEventListener('click', () => {
-      vscode.postMessage({ type:'createTerminal', name:p.name, command:p.command||'' });
+      S.presetCounters[p.name] = (S.presetCounters[p.name]||0) + 1;
+      const num = S.presetCounters[p.name];
+      vscode.postMessage({ type:'createTerminal', name:p.name+' '+num, command:p.command||'' });
     });
     dock.appendChild(btn);
   }
@@ -868,7 +866,8 @@ function renderPresets(presets) {
   addBtn.innerHTML = '<span class="preset-icon">➕</span>';
   addBtn.title = 'New terminal';
   addBtn.addEventListener('click', () => {
-    vscode.postMessage({ type:'createTerminal', name:'Terminal', command:'' });
+    S.presetCounters['Terminal'] = (S.presetCounters['Terminal']||0) + 1;
+    vscode.postMessage({ type:'createTerminal', name:'Terminal '+S.presetCounters['Terminal'], command:'' });
   });
   dock.appendChild(addBtn);
 }
