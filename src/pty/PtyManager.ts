@@ -228,17 +228,21 @@ export class PtyManager {
             child.stdin?.write(data);
           },
           resize: (c: number, r: number) => {
-            // Send SIGWINCH and update env for resize
+            // Send SIGWINCH to notify the process of terminal size change
             try {
               process.kill(child.pid!, 'SIGWINCH');
             } catch (e: any) {
               log(`resize SIGWINCH failed for ${id}: ${e.message}`);
             }
-            // Also write stty resize command for script(1) wrapped shells
-            try {
-              child.stdin?.write(`stty cols ${c} rows ${r}\n`);
-            } catch (e: any) {
-              log(`resize stty write failed for ${id}: ${e.message}`);
+            // On non-Linux fallback (no script(1) PTY wrapper), use stty as fallback
+            // Skip on Linux where script -qc already handles SIGWINCH properly,
+            // because stty commands get echoed to the terminal output
+            if (process.platform !== 'linux') {
+              try {
+                child.stdin?.write(`stty cols ${c} rows ${r}\n`);
+              } catch (e: any) {
+                log(`resize stty write failed for ${id}: ${e.message}`);
+              }
             }
           },
           kill: () => {
