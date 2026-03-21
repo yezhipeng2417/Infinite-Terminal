@@ -634,8 +634,21 @@ function createTerminalCard(id, name, cwd, hasPty, parentId) {
         vscode.postMessage({ type:'terminalInput', id, data });
       });
 
+      let fitTimer = null;
+      let lastCols = term.cols, lastRows = term.rows;
       const doFit = () => {
-        try { fitAddon.fit(); vscode.postMessage({ type:'terminalResize', id, cols:term.cols, rows:term.rows }); } catch (e) { console.warn('xterm fit/resize failed:', e); }
+        if (fitTimer) clearTimeout(fitTimer);
+        fitTimer = setTimeout(() => {
+          try {
+            fitAddon.fit();
+            // Only send resize if dimensions actually changed
+            if (term.cols !== lastCols || term.rows !== lastRows) {
+              lastCols = term.cols;
+              lastRows = term.rows;
+              vscode.postMessage({ type:'terminalResize', id, cols:term.cols, rows:term.rows });
+            }
+          } catch (e) { console.warn('xterm fit/resize failed:', e); }
+        }, 100);
       };
       new ResizeObserver(() => doFit()).observe(body);
     } else {
@@ -911,7 +924,12 @@ window.addEventListener('mouseup', () => {
     canvasContainer.classList.remove('dragging-terminal');
     autoSaveLayout();
   }
-  if (S.isResizing) { S.isResizing=false; S.resizeTarget=null; autoSaveLayout(); }
+  if (S.isResizing) {
+    S.isResizing=false; S.resizeTarget=null;
+    // Final refit after resize drag ends so TUI apps get correct dimensions
+    setTimeout(refitAllTerminals, 150);
+    autoSaveLayout();
+  }
   if (wasDragging) {
     setTimeout(() => {
       if (!S.isDraggingCanvas && !S.isDraggingTerminal && !S.isDraggingGroup) minimapEl.classList.remove('visible');
@@ -937,6 +955,9 @@ canvasContainer.addEventListener('wheel', e => {
     S.canvasY -= e.deltaY;
   }
   updateTransform(); updateMinimap();
+  // Debounced refit after zoom settles
+  if (S._zoomRefitTimer) clearTimeout(S._zoomRefitTimer);
+  S._zoomRefitTimer = setTimeout(refitAllTerminals, 300);
 }, { passive: false, capture: true });
 
 // ==================== TOOLBAR ====================
@@ -948,6 +969,7 @@ $('btn-fit-all').addEventListener('click', fitAll);
 $('btn-auto-layout').addEventListener('click', autoLayout);
 $('btn-reset-zoom').addEventListener('click', () => {
   S.zoom=1; S.canvasX=0; S.canvasY=0; updateTransform();
+  setTimeout(refitAllTerminals, 150);
 });
 // Office view disabled for now
 // $('btn-office-view')?.addEventListener('click', () => { vscode.postMessage({ type:'openPixelAgents' }); });
@@ -967,6 +989,19 @@ function fitAll() {
   S.canvasX = (vw - cW*S.zoom)/2 - minX*S.zoom + pad*S.zoom;
   S.canvasY = (vh - cH*S.zoom)/2 - minY*S.zoom + pad*S.zoom + 50;
   updateTransform();
+  setTimeout(refitAllTerminals, 150);
+}
+
+// ==================== REFIT ALL TERMINALS ====================
+function refitAllTerminals() {
+  for (const [id, t] of S.terminals) {
+    if (t.fitAddon && t.xterm && t.xterm.element) {
+      try {
+        t.fitAddon.fit();
+        vscode.postMessage({ type:'terminalResize', id, cols:t.xterm.cols, rows:t.xterm.rows });
+      } catch (e) { console.warn('refit failed for ' + id, e); }
+    }
+  }
 }
 
 // ==================== TERMINAL SELECTION ====================
