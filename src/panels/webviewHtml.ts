@@ -1797,6 +1797,53 @@ new MutationObserver(() => {
   }
 }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
+// ==================== ZOOM-ADJUSTED MOUSE FOR XTERM ====================
+// CSS transform: scale(zoom) on the canvas causes xterm.js text selection
+// to be offset because mouse coordinates are in screen space (scaled) but
+// xterm measures cell dimensions in CSS space (unscaled). We fix this by
+// adjusting clientX/clientY on mouse events before xterm processes them.
+
+let _zoomSelBody = null;
+
+function _adjustMouseForZoom(e, rect) {
+  if (!rect) return;
+  try {
+    Object.defineProperty(e, 'clientX', {
+      value: rect.left + (e.clientX - rect.left) / S.zoom,
+      configurable: true,
+    });
+    Object.defineProperty(e, 'clientY', {
+      value: rect.top + (e.clientY - rect.top) / S.zoom,
+      configurable: true,
+    });
+  } catch (_) { /* readonly in some edge cases */ }
+}
+
+// Mousedown on xterm: adjust coords and start tracking for selection drag
+canvasEl.addEventListener('mousedown', (e) => {
+  if (Math.abs(S.zoom - 1) < 0.01) return;
+  if (!e.target.closest('.xterm-screen')) return;
+  const termBody = e.target.closest('.terminal-body');
+  if (!termBody) return;
+
+  _zoomSelBody = termBody;
+  _adjustMouseForZoom(e, termBody.getBoundingClientRect());
+}, true);
+
+// Mousemove during xterm selection drag (xterm listens on document)
+document.addEventListener('mousemove', (e) => {
+  if (!_zoomSelBody || Math.abs(S.zoom - 1) < 0.01) return;
+  if (!(e.buttons & 1)) { _zoomSelBody = null; return; }
+  _adjustMouseForZoom(e, _zoomSelBody.getBoundingClientRect());
+}, true);
+
+// Mouseup: adjust final coords and stop tracking
+document.addEventListener('mouseup', (e) => {
+  if (!_zoomSelBody || Math.abs(S.zoom - 1) < 0.01) { _zoomSelBody = null; return; }
+  _adjustMouseForZoom(e, _zoomSelBody.getBoundingClientRect());
+  _zoomSelBody = null;
+}, true);
+
 // ==================== INIT ====================
 updateTransform();
 vscode.postMessage({ type:'requestPresets' });
